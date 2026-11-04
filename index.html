@@ -6,7 +6,12 @@
   <title>KU Library Tour Guide | ระบบช่วยนำชม สำนักหอสมุด มก.</title>
   <meta name="description" content="ระบบช่วยนำชมสำนักหอสมุด มหาวิทยาลัยเกษตรศาสตร์ เลือกกลุ่มผู้เยี่ยมชมและเวลา แล้วรับบทนำชมพร้อมเส้นทางที่เหมาะสม" />
   <meta name="theme-color" content="#006664" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="KU Lib Tour" />
   <link rel="icon" href="icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="apple-touch-icon.png" />
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -76,6 +81,7 @@
     <div class="tour-top">
       <button class="icon-btn" id="tourClose" aria-label="ปิดโหมดนำชม">✕</button>
       <div class="tour-meta" id="tourMeta"></div>
+      <button class="icon-btn" id="tourFont" aria-label="ปรับขนาดตัวอักษร">Aa</button>
       <div class="tour-clock" id="tourClock" title="เวลานำชมรวม">00:00</div>
     </div>
     <div class="tour-progress"><div id="tourBar"></div></div>

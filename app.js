@@ -117,10 +117,21 @@
   $("#startTime").addEventListener("change", (e) => { state.start = e.target.value; renderResult(); });
 
   /* ---------- result ---------- */
-  function stopBody(r, g, openNotes) {
+  /* จอกว้าง (แท็บเล็ตแนวนอน/คอมพิวเตอร์) แสดงบทพูดเต็ม จอแคบพับไว้ให้เห็นภาพรวมเส้นทางก่อน */
+  const isWide = () => matchMedia("(min-width: 820px)").matches;
+
+  function stopBody(r, g, inTour) {
+    const label = `บทนำชม · ${state.lang === "th" ? "ภาษาไทย" : "English"}`;
+    const script = inTour
+      ? `<div class="script" lang="${state.lang}"><span class="script-label">${label}</span>${paras(r.script[state.lang])}</div>`
+      : `<details class="script-box"${isWide() ? " open" : ""}>
+           <summary>📖 ${label}</summary>
+           <div class="script" lang="${state.lang}">${paras(r.script[state.lang])}</div>
+         </details>`;
+    const openNotes = inTour;
     return `
       <div class="emphasis"><span>🎯 เน้นสำหรับ${esc(GROUPS[g].name)}</span>${esc(r.emphasis[g])}</div>
-      <div class="script" lang="${state.lang}"><span class="script-label">บทนำชม · ${state.lang === "th" ? "ภาษาไทย" : "English"}</span>${paras(r.script[state.lang])}</div>
+      ${script}
       ${r.facts && r.facts.length ? `<div class="facts">${r.facts.map((f) => `<span class="fact">${esc(f)}</span>`).join("")}</div>` : ""}
       ${r.link ? `<a class="ext-link" href="${esc(r.link.url)}" target="_blank" rel="noopener">🔗 ${esc(r.link.label)}</a>` : ""}
       ${r.notes && r.notes.length ? `
@@ -174,7 +185,7 @@
                 <div class="stop-head">
                   <div>
                     <div class="stop-time">${state.start ? `${addMin(state.start, r.from)} – ${addMin(state.start, r.from + r.min)} น. · ` : ""}จุดที่ ${r.i + 1}</div>
-                    <h3 class="stop-name">${esc(r.name)}</h3>
+                    <h3 class="stop-name"><span class="stop-ico" aria-hidden="true">${r.icon}</span>${esc(r.name)}</h3>
                     <div class="stop-meta"><span class="bld tone-${BUILDINGS[r.building].tone}">${esc(locLabel(r))}</span> ${esc(r.en)}</div>
                   </div>
                   <span class="badge">${r.min} นาที</span>
@@ -188,18 +199,22 @@
             <h3>ประเด็นที่ควรเน้น</h3>
             <div class="chips">${g.focus.map((f) => `<span class="chip">${esc(f)}</span>`).join("")}</div>
           </div>
-          <div class="card">
-            <h3>✅ เตรียมก่อนนำชม</h3>
-            <ul class="checklist">${PREP.map((p, i) => `<li><label><input type="checkbox" /> <span>${esc(p)}</span></label></li>`).join("")}</ul>
-          </div>
-          <div class="card">
-            <h3>💡 เคล็ดลับผู้นำชม</h3>
+          <details class="card side-card"${isWide() ? " open" : ""}>
+            <summary><h3>✅ เตรียมก่อนนำชม</h3></summary>
+            <ul class="checklist">${PREP.map((p) => `<li><label><input type="checkbox" /> <span>${esc(p)}</span></label></li>`).join("")}</ul>
+          </details>
+          <details class="card side-card"${isWide() ? " open" : ""}>
+            <summary><h3>💡 เคล็ดลับผู้นำชม</h3></summary>
             <ul class="tips">${g.tips.map((t) => `<li>${esc(t)}</li>`).join("")}</ul>
-          </div>
+          </details>
         </aside>
+      </div>
+      <div class="mobile-bar">
+        <button class="btn primary" id="startTour2">▶ เริ่มโหมดนำชม · ${state.duration} นาที</button>
       </div>`;
 
-    $("#startTour").onclick = () => Tour.open(route);
+    $("#startTour").onclick = $("#startTour2").onclick = () => Tour.open(route);
+    document.body.classList.add("has-bar");
     $("#printBtn").onclick = () => window.print();
     $("#shareBtn").onclick = async () => {
       const url = `${location.origin}${location.pathname}${shareUrl()}`;
@@ -211,8 +226,8 @@
   }
 
   /* เปิดหมายเหตุทั้งหมดเมื่อพิมพ์ */
-  window.addEventListener("beforeprint", () => document.querySelectorAll("details.notes").forEach((d) => { d.dataset.wasOpen = d.open; d.open = true; }));
-  window.addEventListener("afterprint", () => document.querySelectorAll("details.notes").forEach((d) => { d.open = d.dataset.wasOpen === "true"; }));
+  window.addEventListener("beforeprint", () => document.querySelectorAll("#result details").forEach((d) => { d.dataset.wasOpen = d.open; d.open = true; }));
+  window.addEventListener("afterprint", () => document.querySelectorAll("#result details").forEach((d) => { d.open = d.dataset.wasOpen === "true"; }));
 
   /* ---------- Tour mode ---------- */
   const Tour = {
@@ -310,6 +325,24 @@
     },
   };
 
+  /* ขนาดตัวอักษรในโหมดนำชม (จำค่าไว้ในเครื่อง) */
+  const FONT_SIZES = ["m", "l", "xl"];
+  const applyFont = (f) => { $("#tour").dataset.font = f; store.set("font", f); };
+  applyFont(FONT_SIZES.includes(store.get("font")) ? store.get("font") : "m");
+  $("#tourFont").onclick = () => {
+    const cur = FONT_SIZES.indexOf($("#tour").dataset.font);
+    applyFont(FONT_SIZES[(cur + 1) % FONT_SIZES.length]);
+    toast(`ขนาดตัวอักษร: ${["ปกติ", "ใหญ่", "ใหญ่มาก"][(cur + 1) % FONT_SIZES.length]}`);
+  };
+
+  /* ปัดซ้าย/ขวาเพื่อเปลี่ยนจุด (มือถือ/แท็บเล็ต) */
+  let sx = 0, sy = 0, st = 0;
+  $("#tourBody").addEventListener("touchstart", (e) => { const t = e.touches[0]; sx = t.clientX; sy = t.clientY; st = Date.now(); }, { passive: true });
+  $("#tourBody").addEventListener("touchend", (e) => {
+    const t = e.changedTouches[0], dx = t.clientX - sx, dy = t.clientY - sy;
+    if (Date.now() - st < 600 && Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 1.5) Tour.go(dx < 0 ? 1 : -1);
+  }, { passive: true });
+
   $("#tourClose").onclick = () => Tour.close();
   $("#tourPrev").onclick = () => Tour.go(-1);
   $("#tourNext").onclick = () => Tour.go(1);
@@ -328,4 +361,15 @@
   renderDurations();
   renderLang();
   renderResult();
+
+  /* ใช้งานออฟไลน์ได้ (เฉพาะเมื่อเปิดผ่าน https หรือ localhost) */
+  if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
+    window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+  }
+
+  /* หมุนจอ/เปลี่ยนขนาด ข้ามจุด 820px → จัดหน้าใหม่ให้เหมาะกับจอ */
+  let wasWide = isWide();
+  window.addEventListener("resize", () => {
+    if (isWide() !== wasWide) { wasWide = isWide(); renderResult(); }
+  });
 })();

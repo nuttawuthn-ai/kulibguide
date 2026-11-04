@@ -206,7 +206,74 @@ button { font: inherit; cursor: pointer; }
 .fade-in { animation: fade .35s ease both; }
 @keyframes fade { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 
+/* ---------- Touch & mobile/tablet ---------- */
+button, summary, a, label, input { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+input, select, textarea { font-size: 16px; } /* ป้องกัน iOS ซูมอัตโนมัติ */
+.lang-switch button { min-height: 38px; min-width: 52px; }
+.start-time input { min-height: 40px; }
+.checklist input { width: 20px; height: 20px; flex-shrink: 0; margin-top: 2px; }
+.checklist label { padding: 4px 0; }
+.ext-link { padding: 6px 0; }
+.icon-btn { min-width: 44px; min-height: 44px; font-weight: 600; }
+
+.stop-ico { display: none; margin-right: 6px; }
+.script-box { margin: 12px 0 8px; }
+.script-box > summary { cursor: pointer; list-style: none; font-size: .88rem; font-weight: 500; color: var(--ku-700); background: var(--ku-50); border-radius: 12px; padding: 10px 14px; display: flex; justify-content: space-between; align-items: center; min-height: 44px; }
+.script-box > summary::-webkit-details-marker { display: none; }
+.script-box > summary::after { content: "แสดง ▾"; font-size: .78rem; color: var(--ku-500); }
+.script-box[open] > summary { border-radius: 12px 12px 0 0; }
+.script-box[open] > summary::after { content: "ซ่อน ▴"; }
+.script-box .script { margin: 0; border-radius: 0 0 12px 0; }
+.notes summary { min-height: 40px; display: flex; align-items: center; }
+
+.side-card > summary { list-style: none; cursor: pointer; min-height: 44px; margin: -8px 0; display: flex; justify-content: space-between; align-items: center; }
+.side-card > summary::-webkit-details-marker { display: none; }
+.side-card > summary h3 { margin: 0; }
+.side-card > summary::after { content: "▾"; color: var(--ku-500); }
+.side-card[open] > summary { margin-bottom: 4px; }
+.side-card[open] > summary::after { content: "▴"; }
+
+.mobile-bar { display: none; }
+
+/* Tour font sizes */
+.tour[data-font="l"] .tour-content .script { font-size: 1.3rem; }
+.tour[data-font="l"] .tour-content .points, .tour[data-font="l"] .emphasis { font-size: 1rem; }
+.tour[data-font="xl"] .tour-content .script { font-size: 1.5rem; line-height: 1.8; }
+.tour[data-font="xl"] .tour-content .points, .tour[data-font="xl"] .emphasis { font-size: 1.1rem; }
+.tour-timer { position: sticky; top: -20px; z-index: 2; box-shadow: 0 6px 14px rgba(0, 70, 68, .06); }
+.tour-meta { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+@media (hover: none) { .group-card:hover { transform: none; } .dur-btn:hover { background: #fff; border-color: var(--line); } }
+
+/* แท็บเล็ตแนวนอน / จอใหญ่: ใช้พื้นที่กว้างขึ้น */
+@media (min-width: 1024px) { .wrap { max-width: 1120px; } .layout { grid-template-columns: 1fr 320px; } }
+
 /* Responsive */
+@media (max-width: 819px) {
+  .mobile-bar { display: block; position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); background: rgba(246, 251, 249, .92); backdrop-filter: blur(10px); border-top: 1px solid var(--line); }
+  .mobile-bar .btn { width: 100%; justify-content: center; padding: 14px; font-size: 1rem; }
+  body.has-bar .footer { padding-bottom: 100px; }
+  .side { gap: 10px; }
+  .side .card { margin-bottom: 0; padding: 14px 16px; }
+}
+@media (max-width: 640px) {
+  .timeline::before, .stop-dot { display: none; }
+  .stop { padding-left: 0; margin-bottom: 10px; }
+  .stop-ico { display: inline; }
+  .stop-card { padding: 14px; border-radius: 16px; }
+  .move { margin: 0 0 10px 8px; }
+  .card { padding: 16px; }
+  .summary { padding: 18px; }
+  .summary-icon { width: 48px; height: 48px; font-size: 1.7rem; border-radius: 14px; }
+  .summary h2 { font-size: 1.1rem; }
+  .options-row { flex-direction: column; gap: 10px; }
+  .start-time { justify-content: space-between; width: 100%; }
+  .tour-top { padding: 10px 12px; gap: 8px; }
+  .tour-icon { width: 56px; height: 56px; font-size: 1.9rem; border-radius: 16px; }
+  .tour-timer { padding: 10px 12px; gap: 10px; }
+  .ring { width: 52px; height: 52px; }
+  .timer-text { font-size: 1.35rem; }
+}
 @media (max-width: 820px) {
   .layout { grid-template-columns: 1fr; }
   .side { position: static; order: -1; }
@@ -226,7 +293,8 @@ button { font: inherit; cursor: pointer; }
 /* Print: clean script sheet */
 @media print {
   body { background: #fff; }
-  .topbar, .hero, .step, .actions, .bg-blob, .footer, .tour, .toast { display: none !important; }
+  .topbar, .hero, .step, .actions, .bg-blob, .footer, .tour, .toast, .mobile-bar { display: none !important; }
+  .script-box > summary::after, .side-card > summary::after { content: "" !important; }
   .summary { background: none; color: var(--ink); box-shadow: none; border: 1px solid var(--line); }
   .summary-icon, .stat { background: var(--ku-50); }
   .layout { grid-template-columns: 1fr; }
