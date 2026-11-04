@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>KU Library Tour Guide | ระบบช่วยนำชม สำนักหอสมุด มก.</title>
+  <meta name="description" content="ระบบช่วยนำชมสำนักหอสมุด มหาวิทยาลัยเกษตรศาสตร์ เลือกกลุ่มผู้เยี่ยมชมและเวลา แล้วรับบทนำชมพร้อมเส้นทางที่เหมาะสม" />
+  <meta name="theme-color" content="#006664" />
+  <link rel="icon" href="icon.svg" type="image/svg+xml" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600&family=Noto+Sans+Thai:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="bg-blob b1" aria-hidden="true"></div>
+  <div class="bg-blob b2" aria-hidden="true"></div>
+
+  <header class="topbar">
+    <div class="wrap topbar-inner">
+      <div class="brand">
+        <img src="icon.svg" alt="" class="brand-mark" width="40" height="40" />
+        <div>
+          <div class="brand-title">KU Library Tour Guide</div>
+          <div class="brand-sub">ระบบช่วยนำชม สำนักหอสมุด มหาวิทยาลัยเกษตรศาสตร์</div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="hero">
+      <h1>วางแผนการนำชม<br class="br-sm" /> ได้ในไม่กี่วินาที</h1>
+      <p>เลือกกลุ่มผู้เยี่ยมชมและเวลา ระบบจะจัดเส้นทาง พร้อมบทนำชมที่เหมาะสมให้ทันที</p>
+    </section>
+
+    <section class="card step" aria-labelledby="step1">
+      <div class="step-head">
+        <span class="step-num">1</span>
+        <h2 id="step1">เลือกกลุ่มผู้เยี่ยมชม</h2>
+      </div>
+      <div class="group-grid" id="groupGrid" role="radiogroup" aria-labelledby="step1"></div>
+    </section>
+
+    <section class="card step" aria-labelledby="step2">
+      <div class="step-head">
+        <span class="step-num">2</span>
+        <h2 id="step2">เลือกเวลานำชม</h2>
+      </div>
+      <div class="dur-grid" id="durGrid" role="radiogroup" aria-labelledby="step2"></div>
+      <label class="start-time">
+        <span>เวลาเริ่มนำชม</span>
+        <input type="time" id="startTime" />
+      </label>
+    </section>
+
+    <section id="result" class="result" aria-live="polite"></section>
+  </main>
+
+  <footer class="footer wrap">
+    สำนักหอสมุด มหาวิทยาลัยเกษตรศาสตร์ · เครื่องมือช่วยผู้นำชม
+  </footer>
+
+  <!-- Tour mode -->
+  <div class="tour" id="tour" hidden role="dialog" aria-modal="true" aria-labelledby="tourTitle">
+    <div class="tour-top">
+      <button class="icon-btn" id="tourClose" aria-label="ปิดโหมดนำชม">✕</button>
+      <div class="tour-meta" id="tourMeta"></div>
+      <div class="tour-clock" id="tourClock" title="เวลานำชมรวม">00:00</div>
+    </div>
+    <div class="tour-progress"><div id="tourBar"></div></div>
+    <div class="tour-body" id="tourBody"></div>
+    <div class="tour-nav">
+      <button class="btn ghost" id="tourPrev">‹ ก่อนหน้า</button>
+      <button class="btn soft" id="tourPause">⏸ พัก</button>
+      <button class="btn primary" id="tourNext">ถัดไป ›</button>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" role="status"></div>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
