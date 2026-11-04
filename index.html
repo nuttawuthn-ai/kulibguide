@@ -49,10 +49,19 @@
         <h2 id="step2">เลือกเวลานำชม</h2>
       </div>
       <div class="dur-grid" id="durGrid" role="radiogroup" aria-labelledby="step2"></div>
-      <label class="start-time">
-        <span>เวลาเริ่มนำชม</span>
-        <input type="time" id="startTime" />
-      </label>
+      <div class="options-row">
+        <label class="start-time">
+          <span>เวลาเริ่มนำชม</span>
+          <input type="time" id="startTime" />
+        </label>
+        <div class="start-time">
+          <span id="langLabel">ภาษาบทพูด</span>
+          <div class="lang-switch" role="radiogroup" aria-labelledby="langLabel">
+            <button type="button" role="radio" data-lang="th" aria-checked="true">ไทย</button>
+            <button type="button" role="radio" data-lang="en" aria-checked="false">English</button>
+          </div>
+        </div>
+      </div>
     </section>
 
     <section id="result" class="result" aria-live="polite"></section>

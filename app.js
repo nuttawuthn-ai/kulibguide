@@ -7,14 +7,16 @@
     set(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } },
   };
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const paras = (s) => String(s).split(/\n\n+/).map((p) => `<p>${esc(p).replace(/\n/g, "<br />")}</p>`).join("");
 
-  const state = { group: null, duration: null, start: "" };
+  const state = { group: null, duration: null, start: "", lang: "th" };
 
   /* ---------- init state from URL or last use ---------- */
   const params = new URLSearchParams(location.search);
-  const pg = params.get("g"), pt = Number(params.get("t"));
-  state.group = GROUPS[pg] ? pg : (GROUPS[store.get("g")] ? store.get("g") : null);
-  state.duration = DURATIONS.includes(pt) ? pt : (DURATIONS.includes(Number(store.get("t"))) ? Number(store.get("t")) : null);
+  const pick = (v, ok) => (ok(v) ? v : null);
+  state.group = pick(params.get("g"), (v) => GROUPS[v]) || pick(store.get("g"), (v) => GROUPS[v]);
+  state.duration = pick(Number(params.get("t")), (v) => DURATIONS.includes(v)) || pick(Number(store.get("t")), (v) => DURATIONS.includes(v));
+  state.lang = pick(params.get("l"), (v) => v === "th" || v === "en") || pick(store.get("l"), (v) => v === "th" || v === "en") || "th";
 
   const now = new Date();
   now.setMinutes(Math.ceil(now.getMinutes() / 5) * 5, 0, 0);
@@ -28,13 +30,32 @@
     const t = (h * 60 + mi + m) % 1440;
     return `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`;
   };
+  const locLabel = (s) => `${BUILDINGS[s.building].th} · ชั้น ${s.floor}`;
+
+  /* คำแนะนำการเดินระหว่างจุด คำนวณจากอาคาร/ชั้น */
+  const vert = (from, to) => (to > from ? `ขึ้นลิฟต์ไปชั้น ${to}` : from - to === 1 ? `ลงบันไดไปชั้น ${to}` : `ลงลิฟต์ไปชั้น ${to}`);
+  function moveText(a, b) {
+    const steps = [];
+    if (a.building === b.building) {
+      if (a.floor !== b.floor) steps.push(vert(a.floor, b.floor));
+    } else {
+      const linkF = a.floor === 1 && b.floor === 1 ? 1 : 2;
+      if (a.building !== "bridge" && a.floor !== linkF) steps.push(vert(a.floor, linkF));
+      if (b.building === "bridge") steps.push(`เดินไปทางเชื่อมอาคาร ชั้น ${linkF}`);
+      else if (a.building === "bridge") steps.push(`เข้า${BUILDINGS[b.building].th}`);
+      else steps.push(`เดินทางเชื่อมชั้น ${linkF} ไป${BUILDINGS[b.building].th}`);
+      if (b.building !== "bridge" && b.floor !== linkF) steps.push(vert(linkF, b.floor));
+    }
+    return steps.join(" → ") || "เดินต่อในบริเวณเดียวกัน";
+  }
+
   const getRoute = () => {
     if (!state.group || !state.duration) return null;
-    let acc = 0;
+    let acc = 0, prev = null;
     return ROUTES[state.group][state.duration].map(([id, min], i) => {
       const s = STOPS[id];
-      const item = { id, min, i, from: acc, ...s };
-      acc += min;
+      const item = { id, min, i, from: acc, move: prev ? moveText(prev, s) : "", ...s };
+      acc += min; prev = s;
       return item;
     });
   };
@@ -45,6 +66,7 @@
     clearTimeout(toast._t);
     toast._t = setTimeout(() => t.classList.remove("show"), 2000);
   };
+  const shareUrl = () => `?g=${state.group}&t=${state.duration}&l=${state.lang}`;
 
   /* ---------- selectors ---------- */
   function renderGroups() {
@@ -61,8 +83,17 @@
   function renderDurations() {
     $("#durGrid").innerHTML = DURATIONS.map((d) => `
       <button type="button" class="dur-btn" role="radio" aria-checked="${state.duration === d}" data-t="${d}">
-        <span class="num">${d}</span><span class="unit">นาที</span>
+        <span class="num">${d}</span><span class="unit">นาที${d === 45 ? " · ฉบับเต็ม" : ""}</span>
       </button>`).join("");
+  }
+  function renderLang() {
+    document.querySelectorAll("[data-lang]").forEach((b) => b.setAttribute("aria-checked", String(b.dataset.lang === state.lang)));
+  }
+  function setLang(l) {
+    state.lang = l;
+    store.set("l", l);
+    renderLang(); renderResult();
+    if (!$("#tour").hidden) Tour.render(true);
   }
 
   $("#groupGrid").addEventListener("click", (e) => {
@@ -79,9 +110,26 @@
     store.set("t", state.duration);
     renderDurations(); renderResult(true);
   });
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-lang]");
+    if (b) setLang(b.dataset.lang);
+  });
   $("#startTime").addEventListener("change", (e) => { state.start = e.target.value; renderResult(); });
 
   /* ---------- result ---------- */
+  function stopBody(r, g, openNotes) {
+    return `
+      <div class="emphasis"><span>🎯 เน้นสำหรับ${esc(GROUPS[g].name)}</span>${esc(r.emphasis[g])}</div>
+      <div class="script" lang="${state.lang}"><span class="script-label">บทนำชม · ${state.lang === "th" ? "ภาษาไทย" : "English"}</span>${paras(r.script[state.lang])}</div>
+      ${r.facts && r.facts.length ? `<div class="facts">${r.facts.map((f) => `<span class="fact">${esc(f)}</span>`).join("")}</div>` : ""}
+      ${r.link ? `<a class="ext-link" href="${esc(r.link.url)}" target="_blank" rel="noopener">🔗 ${esc(r.link.label)}</a>` : ""}
+      ${r.notes && r.notes.length ? `
+        <details class="notes"${openNotes ? " open" : ""}>
+          <summary>📝 หมายเหตุผู้นำชม (${r.notes.length})</summary>
+          <ul class="points">${r.notes.map((p) => `<li>${esc(p)}</li>`).join("")}</ul>
+        </details>` : ""}`;
+  }
+
   function renderResult(scroll) {
     const el = $("#result");
     const route = getRoute();
@@ -91,7 +139,7 @@
       return;
     }
     const g = GROUPS[state.group];
-    const floors = [...new Set(route.map((r) => r.floor).filter((f) => f.startsWith("ชั้น")))];
+    const blds = [...new Set(route.map((r) => r.building).filter((b) => b !== "bridge"))].map((b) => BUILDINGS[b].th);
     const end = addMin(state.start, state.duration);
 
     el.innerHTML = `
@@ -105,8 +153,9 @@
         </div>
         <div class="stats">
           <span class="stat">📍 ${route.length} จุด</span>
-          <span class="stat">🏢 ${floors.join(", ")}</span>
+          <span class="stat">🏢 ${blds.join(" + ")}</span>
           ${state.start ? `<span class="stat">🕒 ${state.start} – ${end} น.</span>` : ""}
+          <span class="stat">🗣 ${state.lang === "th" ? "ภาษาไทย" : "English"}</span>
         </div>
         <div class="actions">
           <button class="btn white" id="startTour">▶ เริ่มโหมดนำชม</button>
@@ -118,19 +167,19 @@
       <div class="layout">
         <ol class="timeline">
           ${route.map((r) => `
-            <li class="stop fade-in" style="animation-delay:${r.i * 40}ms">
+            ${r.move ? `<li class="move" aria-label="การเดินทาง">🚶 ${esc(r.move)}</li>` : ""}
+            <li class="stop fade-in" style="animation-delay:${r.i * 30}ms">
               <div class="stop-dot" aria-hidden="true">${r.icon}</div>
               <div class="stop-card">
                 <div class="stop-head">
                   <div>
                     <div class="stop-time">${state.start ? `${addMin(state.start, r.from)} – ${addMin(state.start, r.from + r.min)} น. · ` : ""}จุดที่ ${r.i + 1}</div>
                     <h3 class="stop-name">${esc(r.name)}</h3>
-                    <div class="stop-meta">${esc(r.floor)} · ${esc(r.en)}</div>
+                    <div class="stop-meta"><span class="bld tone-${BUILDINGS[r.building].tone}">${esc(locLabel(r))}</span> ${esc(r.en)}</div>
                   </div>
                   <span class="badge">${r.min} นาที</span>
                 </div>
-                <div class="script"><span class="script-label">บทนำชม</span>${esc(r.script[state.group])}</div>
-                <ul class="points">${r.points[state.group].map((p) => `<li>${esc(p)}</li>`).join("")}</ul>
+                ${stopBody(r, state.group, false)}
               </div>
             </li>`).join("")}
         </ol>
@@ -138,6 +187,10 @@
           <div class="card tone-${g.tone}">
             <h3>ประเด็นที่ควรเน้น</h3>
             <div class="chips">${g.focus.map((f) => `<span class="chip">${esc(f)}</span>`).join("")}</div>
+          </div>
+          <div class="card">
+            <h3>✅ เตรียมก่อนนำชม</h3>
+            <ul class="checklist">${PREP.map((p, i) => `<li><label><input type="checkbox" /> <span>${esc(p)}</span></label></li>`).join("")}</ul>
           </div>
           <div class="card">
             <h3>💡 เคล็ดลับผู้นำชม</h3>
@@ -149,13 +202,17 @@
     $("#startTour").onclick = () => Tour.open(route);
     $("#printBtn").onclick = () => window.print();
     $("#shareBtn").onclick = async () => {
-      const url = `${location.origin}${location.pathname}?g=${state.group}&t=${state.duration}`;
+      const url = `${location.origin}${location.pathname}${shareUrl()}`;
       try { await navigator.clipboard.writeText(url); toast("คัดลอกลิงก์แล้ว"); }
       catch { prompt("คัดลอกลิงก์นี้", url); }
     };
-    history.replaceState(null, "", `?g=${state.group}&t=${state.duration}`);
-    if (scroll && state.group && state.duration) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    history.replaceState(null, "", shareUrl());
+    if (scroll) el.scrollIntoView({ behavior: "smooth", block: "start" });
   }
+
+  /* เปิดหมายเหตุทั้งหมดเมื่อพิมพ์ */
+  window.addEventListener("beforeprint", () => document.querySelectorAll("details.notes").forEach((d) => { d.dataset.wasOpen = d.open; d.open = true; }));
+  window.addEventListener("afterprint", () => document.querySelectorAll("details.notes").forEach((d) => { d.open = d.dataset.wasOpen === "true"; }));
 
   /* ---------- Tour mode ---------- */
   const Tour = {
@@ -209,22 +266,25 @@
       tt.classList.toggle("over", over);
       $("#timerSub").textContent = over ? "เกินเวลาที่วางแผนไว้" : `เหลือเวลาที่จุดนี้ (จาก ${r.min} นาที)`;
       const planned = state.duration * 60;
-      $("#tourClock").textContent = `${this.fmt(this.totalSec).replace("+", "")} / ${state.duration}:00`;
+      $("#tourClock").textContent = `${this.fmt(this.totalSec)} / ${state.duration}:00`;
       $("#tourClock").style.color = this.totalSec > planned ? "#c66a3b" : "";
     },
-    render() {
+    render(keepScroll) {
       const r = this.route[this.idx];
       const next = this.route[this.idx + 1];
       const g = state.group;
       const C = 2 * Math.PI * 28;
+      const body = $("#tourBody");
+      const y = body.scrollTop;
       $("#tourMeta").textContent = `จุดที่ ${this.idx + 1} / ${this.route.length} · ${GROUPS[g].name}`;
       $("#tourBar").style.width = `${((this.idx + 1) / this.route.length) * 100}%`;
-      $("#tourBody").innerHTML = `
-        <div class="fade-in">
+      body.innerHTML = `
+        <div class="${keepScroll ? "" : "fade-in"}">
+          ${r.move ? `<div class="move tour-move">🚶 ${esc(r.move)}</div>` : ""}
           <div class="tour-stop-head">
             <div class="tour-icon" aria-hidden="true">${r.icon}</div>
             <div>
-              <div class="stop-meta">${esc(r.floor)} · ${esc(r.en)}</div>
+              <div class="stop-meta"><span class="bld tone-${BUILDINGS[r.building].tone}">${esc(locLabel(r))}</span> ${esc(r.en)}</div>
               <h2 id="tourTitle">${esc(r.name)}</h2>
             </div>
           </div>
@@ -234,16 +294,19 @@
               <circle class="val" cx="32" cy="32" r="28" stroke-dasharray="${C}" stroke-dashoffset="0" />
             </svg>
             <div><div class="timer-text" id="timerText"></div><div class="timer-sub" id="timerSub"></div></div>
+            <div class="lang-switch small" role="radiogroup" aria-label="ภาษาบทพูด">
+              <button type="button" role="radio" data-lang="th" aria-checked="${state.lang === "th"}">ไทย</button>
+              <button type="button" role="radio" data-lang="en" aria-checked="${state.lang === "en"}">EN</button>
+            </div>
           </div>
-          <div class="tour-script">${esc(r.script[g])}</div>
-          <ul class="points">${r.points[g].map((p) => `<li>${esc(p)}</li>`).join("")}</ul>
-          ${next ? `<div class="tour-next">ถัดไป → ${next.icon} ${esc(next.name)} (${esc(next.floor)})</div>` : `<div class="tour-next">จุดสุดท้ายของการนำชม</div>`}
+          <div class="tour-content">${stopBody(r, g, true)}</div>
+          ${next ? `<div class="tour-next">ถัดไป → ${next.icon} ${esc(next.name)} (${esc(locLabel(next))})</div>` : `<div class="tour-next">จุดสุดท้ายของการนำชม</div>`}
         </div>`;
       $("#tourPrev").disabled = this.idx === 0;
       $("#tourNext").textContent = next ? "ถัดไป ›" : "✓ จบการนำชม";
       $("#tourPause").textContent = this.paused ? "▶ ต่อ" : "⏸ พัก";
       this.updateTimer();
-      $("#tourBody").scrollTop = 0;
+      body.scrollTop = keepScroll ? y : 0;
     },
   };
 
@@ -263,5 +326,6 @@
 
   renderGroups();
   renderDurations();
+  renderLang();
   renderResult();
 })();

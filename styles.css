@@ -93,7 +93,13 @@ button { font: inherit; cursor: pointer; }
 .dur-btn[aria-checked="true"] { background: var(--ku); border-color: var(--ku); }
 .dur-btn[aria-checked="true"] .num, .dur-btn[aria-checked="true"] .unit { color: #fff; }
 
-.start-time { display: inline-flex; align-items: center; gap: 10px; margin-top: 14px; font-size: .9rem; color: var(--muted); }
+.options-row { display: flex; flex-wrap: wrap; gap: 12px 28px; margin-top: 14px; }
+.start-time { display: inline-flex; align-items: center; gap: 10px; font-size: .9rem; color: var(--muted); }
+.lang-switch { display: inline-flex; background: var(--ku-50); border: 1px solid var(--line); border-radius: 12px; padding: 3px; gap: 2px; }
+.lang-switch button { border: 0; background: transparent; color: var(--ku-700); border-radius: 9px; padding: 5px 14px; font-size: .88rem; }
+.lang-switch button[aria-checked="true"] { background: var(--ku); color: #fff; }
+.lang-switch.small { margin-left: auto; align-self: center; }
+.lang-switch.small button { padding: 4px 10px; font-size: .8rem; }
 .start-time input { font: inherit; border: 1px solid var(--line); border-radius: 10px; padding: 6px 10px; color: var(--ink); background: var(--ku-50); }
 
 /* Result */
@@ -140,6 +146,26 @@ button { font: inherit; cursor: pointer; }
 .badge { background: var(--butter); color: var(--butter-ink); border-radius: 999px; padding: 3px 10px; font-size: .8rem; white-space: nowrap; font-weight: 500; }
 .script { margin: 12px 0 8px; background: var(--ku-50); border-left: 4px solid var(--ku-500); border-radius: 0 12px 12px 0; padding: 10px 14px; font-size: .95rem; }
 .script-label { font-size: .72rem; color: var(--ku-500); font-weight: 600; letter-spacing: .04em; display: block; margin-bottom: 2px; }
+.script p { margin: 0 0 8px; }
+.script p:last-child { margin-bottom: 0; }
+.emphasis { margin-top: 10px; font-size: .88rem; background: var(--butter); color: #5b4a12; border-radius: 12px; padding: 8px 12px; }
+.emphasis span { display: block; font-size: .72rem; font-weight: 600; color: var(--butter-ink); }
+.facts { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.fact { background: var(--sky); color: var(--sky-ink); border-radius: 999px; padding: 3px 10px; font-size: .78rem; }
+.ext-link { display: inline-block; font-size: .85rem; color: var(--ku); margin: 2px 0 6px; }
+.notes { margin-top: 6px; border-top: 1px dashed var(--line); padding-top: 8px; }
+.notes summary { cursor: pointer; font-size: .85rem; color: var(--ku-700); font-weight: 500; }
+.notes[open] summary { margin-bottom: 4px; }
+.bld { display: inline-block; background: var(--tone, var(--ku-50)); color: var(--tone-ink, var(--ku-700)); border-radius: 6px; padding: 0 8px; font-size: .75rem; font-weight: 500; margin-right: 4px; }
+.tone-sky { --tone: var(--sky); --tone-ink: var(--sky-ink); }
+.move { list-style: none; position: relative; margin: -4px 0 10px 58px; font-size: .82rem; color: var(--ku-700); background: rgba(255,255,255,.7); border: 1px dashed var(--ku-200); border-radius: 10px; padding: 4px 10px; display: inline-block; }
+.tour-move { margin: 0 0 14px; display: block; background: var(--ku-50); font-size: .9rem; }
+.checklist { list-style: none; margin: 0; padding: 0; font-size: .88rem; color: var(--muted); }
+.checklist li { margin-bottom: 6px; }
+.checklist label { display: flex; gap: 8px; align-items: flex-start; cursor: pointer; }
+.checklist input { accent-color: var(--ku); margin-top: 4px; }
+.checklist input:checked + span { text-decoration: line-through; opacity: .6; }
+.tour-content .script { font-size: clamp(1.02rem, 2.4vw, 1.15rem); line-height: 1.75; background: #fff; border: 1px solid var(--line); border-left: 4px solid var(--ku-500); }
 .points { margin: 0; padding-left: 0; list-style: none; font-size: .88rem; color: var(--muted); }
 .points li { padding-left: 20px; position: relative; margin-top: 4px; }
 .points li::before { content: "•"; position: absolute; left: 6px; color: var(--ku-500); font-weight: 700; }
@@ -206,5 +232,7 @@ button { font: inherit; cursor: pointer; }
   .layout { grid-template-columns: 1fr; }
   .side { position: static; }
   .stop, .card { break-inside: avoid; }
+  .move { break-after: avoid; }
+  .notes summary { list-style: none; }
   .stop-card, .card { box-shadow: none; }
 }
