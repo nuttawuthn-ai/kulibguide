@@ -314,3 +314,11 @@ input, select, textarea { font-size: 16px; } /* ป้องกัน iOS ซู
 .dur-label { grid-column: 1 / -1; margin: 4px 0 -2px; font-size: .88rem; font-weight: 600; color: var(--ku-700); }
 .dur-label:not(:first-child) { margin-top: 10px; }
 .card[hidden] { display: none; }
+
+/* ปุ่มไปปฏิทินการจองบริการนำชม (หัวเว็บ) */
+.booking-link { display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto; white-space: nowrap; text-decoration: none; font-weight: 600; font-size: .9rem; color: var(--ku-700); background: var(--card); border: 1px solid var(--ku-200); border-radius: 999px; padding: 8px 14px; transition: background .15s, border-color .15s; }
+.booking-link:hover { background: var(--ku-50); border-color: var(--ku-500); }
+.booking-link:focus-visible { outline: 3px solid var(--ku-200); outline-offset: 2px; }
+.booking-link .ext { font-size: .8em; opacity: .7; }
+@media (max-width: 400px) { .booking-link { padding: 8px 11px; font-size: .84rem; } .booking-link .ext { display: none; } }
+@media print { .booking-link { display: none; } }
