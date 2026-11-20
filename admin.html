@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>แอดมิน · KU Library Tour Guide</title>
+  <meta name="robots" content="noindex" />
+  <meta name="theme-color" content="#006664" />
+  <link rel="icon" href="icon.svg" type="image/svg+xml" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600&family=Noto+Sans+Thai:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="admin.css" />
+</head>
+<body class="admin">
+  <header class="topbar">
+    <div class="wrap admin-wide topbar-inner">
+      <div class="brand">
+        <img src="icon.svg" alt="" class="brand-mark" width="40" height="40" />
+        <div>
+          <div class="brand-title">แอดมิน · KU Library Tour Guide</div>
+          <div class="brand-sub">แก้ไขบทนำชม จุดนำชม และเส้นทาง</div>
+        </div>
+      </div>
+      <div class="top-actions">
+        <a class="btn ghost sm" href="./" target="_blank" rel="noopener">เปิดเว็บนำชม ↗</a>
+        <button type="button" class="btn ghost sm" id="logoutBtn" hidden>ออกจากระบบ</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap admin-wide">
+    <!-- เข้าสู่ระบบ -->
+    <section id="login" class="card login-card">
+      <div class="login-icon" aria-hidden="true">🔐</div>
+      <h1>เข้าสู่หน้าแอดมิน</h1>
+      <p class="muted">ใส่ PIN เพื่อแก้ไขข้อมูลการนำชม การแก้ไขจะแสดงบนเว็บนำชมทันทีหลังบันทึก</p>
+      <form id="loginForm" autocomplete="off">
+        <label class="field">
+          <span>PIN</span>
+          <input id="pinInput" type="password" inputmode="numeric" autocomplete="current-password" maxlength="12" required />
+        </label>
+        <button class="btn primary block" id="loginBtn" type="submit">เข้าสู่ระบบ</button>
+      </form>
+      <p class="msg" id="loginMsg" role="alert"></p>
+      <div class="notice warn" id="noApi" hidden>
+        <b>ยังไม่ได้เชื่อมต่อ API</b>
+        ใส่ URL ของ Apps Script ในไฟล์ <code>config.js</code> ก่อนจึงจะบันทึกได้ ระหว่างนี้ทดลองแก้ไข ดูตัวอย่าง และดาวน์โหลดไฟล์สำรองได้
+        <button type="button" class="btn soft sm" id="demoBtn">ทดลองใช้แบบไม่บันทึก</button>
+      </div>
+    </section>
+
+    <!-- พื้นที่ทำงาน -->
+    <section id="app" hidden>
+      <div class="notice" id="resume" hidden>
+        <span>พบงานที่แก้ค้างไว้และยังไม่ได้บันทึกจากครั้งก่อน</span>
+        <span class="notice-actions">
+          <button type="button" class="btn primary sm" id="resumeYes">ใช้งานต่อ</button>
+          <button type="button" class="btn ghost sm" id="resumeNo">ทิ้ง</button>
+        </span>
+      </div>
+      <div class="meta-line" id="metaLine"></div>
+      <nav class="tabs" role="tablist" aria-label="ส่วนที่แก้ไข">
+        <button type="button" role="tab" data-tab="stops">📍 จุดนำชม</button>
+        <button type="button" role="tab" data-tab="routes">🗺️ เส้นทาง</button>
+        <button type="button" role="tab" data-tab="groups">👥 กลุ่มผู้เยี่ยมชม</button>
+        <button type="button" role="tab" data-tab="settings">⚙️ เวลา & เตรียมการ</button>
+        <button type="button" role="tab" data-tab="history">🕘 ประวัติ</button>
+      </nav>
+      <div id="panel"></div>
+    </section>
+  </main>
+
+  <!-- แถบบันทึก -->
+  <div class="savebar" id="savebar" hidden>
+    <div class="wrap admin-wide savebar-inner">
+      <button type="button" class="check-chip" id="checkBtn" aria-expanded="false"></button>
+      <span class="dirty" id="dirtyText"></span>
+      <div class="savebar-actions">
+        <button type="button" class="btn ghost" id="discardBtn">↺ ทิ้งการแก้ไข</button>
+        <button type="button" class="btn soft" id="previewBtn">👁 ตัวอย่าง</button>
+        <button type="button" class="btn primary" id="saveBtn">💾 บันทึก</button>
+      </div>
+    </div>
+    <div class="wrap admin-wide check-list" id="checkList" hidden></div>
+  </div>
+
+  <!-- ยืนยันการบันทึก -->
+  <dialog id="saveDlg" aria-labelledby="saveTitle">
+    <form method="dialog" id="saveForm">
+      <h2 id="saveTitle">บันทึกและเผยแพร่</h2>
+      <p class="muted">ข้อมูลจะแสดงบนเว็บนำชมทันที และเก็บเป็นประวัติให้กู้คืนได้</p>
+      <label class="field"><span>ชื่อผู้แก้ไข</span><input id="editorInput" maxlength="60" required /></label>
+      <label class="field"><span>แก้ไขอะไร (ไม่บังคับ)</span><input id="noteInput" maxlength="300" placeholder="เช่น ปรับบทพูด Reference Desk เรื่องยืมจากต่างประเทศ" /></label>
+      <div class="notice warn" id="saveWarn" hidden></div>
+      <p class="msg" id="saveMsg" role="alert"></p>
+      <div class="dlg-actions">
+        <button type="button" class="btn ghost" id="saveCancel">ยกเลิก</button>
+        <button type="submit" class="btn primary" id="saveConfirm">บันทึก</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div class="toast" id="toast" role="status"></div>
+
+  <script src="config.js"></script>
+  <script src="data.js"></script>
+  <script src="content.js"></script>
+  <script src="admin.js"></script>
+</body>
+</html>

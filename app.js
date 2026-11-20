@@ -13,10 +13,18 @@
 
   /* ---------- init state from URL or last use ---------- */
   const params = new URLSearchParams(location.search);
+  const preview = params.has("draft");
   const pick = (v, ok) => (ok(v) ? v : null);
-  state.group = pick(params.get("g"), (v) => GROUPS[v]) || pick(store.get("g"), (v) => GROUPS[v]);
-  state.duration = pick(Number(params.get("t")), (v) => DURATIONS.includes(v)) || pick(Number(store.get("t")), (v) => DURATIONS.includes(v));
-  state.lang = pick(params.get("l"), (v) => v === "th" || v === "en") || pick(store.get("l"), (v) => v === "th" || v === "en") || "th";
+  function initState() {
+    state.group = pick(params.get("g"), (v) => GROUPS[v]) || pick(store.get("g"), (v) => GROUPS[v]);
+    state.duration = pick(Number(params.get("t")), (v) => DURATIONS.includes(v)) || pick(Number(store.get("t")), (v) => DURATIONS.includes(v));
+    state.lang = pick(params.get("l"), (v) => v === "th" || v === "en") || pick(store.get("l"), (v) => v === "th" || v === "en") || "th";
+  }
+  /* หลังได้ข้อมูลชุดใหม่: ล้างค่าที่เลือกไว้ถ้ากลุ่ม/เวลานั้นไม่มีแล้ว */
+  function keepValidState() {
+    if (state.group && !GROUPS[state.group]) state.group = null;
+    if (state.duration && !DURATIONS.includes(state.duration)) state.duration = null;
+  }
 
   const now = new Date();
   now.setMinutes(Math.ceil(now.getMinutes() / 5) * 5, 0, 0);
@@ -83,7 +91,7 @@
   function renderDurations() {
     $("#durGrid").innerHTML = DURATIONS.map((d) => `
       <button type="button" class="dur-btn" role="radio" aria-checked="${state.duration === d}" data-t="${d}">
-        <span class="num">${d}</span><span class="unit">นาที${d === 45 ? " · ฉบับเต็ม" : ""}</span>
+        <span class="num">${d}</span><span class="unit">นาที${d === FULL_DURATION ? " · ฉบับเต็ม" : ""}</span>
       </button>`).join("");
   }
   function renderLang() {
@@ -122,18 +130,19 @@
 
   function stopBody(r, g, inTour) {
     const label = `บทนำชม · ${state.lang === "th" ? "ภาษาไทย" : "English"}`;
+    const text = String(r.script[state.lang]).replaceAll("{min}", state.duration);
     const script = inTour
-      ? `<div class="script" lang="${state.lang}"><span class="script-label">${label}</span>${paras(r.script[state.lang])}</div>`
+      ? `<div class="script" lang="${state.lang}"><span class="script-label">${label}</span>${paras(text)}</div>`
       : `<details class="script-box"${isWide() ? " open" : ""}>
            <summary>📖 ${label}</summary>
-           <div class="script" lang="${state.lang}">${paras(r.script[state.lang])}</div>
+           <div class="script" lang="${state.lang}">${paras(text)}</div>
          </details>`;
     const openNotes = inTour;
     return `
       <div class="emphasis"><span>🎯 เน้นสำหรับ${esc(GROUPS[g].name)}</span>${esc(r.emphasis[g])}</div>
       ${script}
       ${r.facts && r.facts.length ? `<div class="facts">${r.facts.map((f) => `<span class="fact">${esc(f)}</span>`).join("")}</div>` : ""}
-      ${r.link ? `<a class="ext-link" href="${esc(r.link.url)}" target="_blank" rel="noopener">🔗 ${esc(r.link.label)}</a>` : ""}
+      ${r.link && /^https?:\/\//i.test(r.link.url) ? `<a class="ext-link" href="${esc(r.link.url)}" target="_blank" rel="noopener">🔗 ${esc(r.link.label)}</a>` : ""}
       ${r.notes && r.notes.length ? `
         <details class="notes"${openNotes ? " open" : ""}>
           <summary>📝 หมายเหตุผู้นำชม (${r.notes.length})</summary>
@@ -221,7 +230,7 @@
       try { await navigator.clipboard.writeText(url); toast("คัดลอกลิงก์แล้ว"); }
       catch { prompt("คัดลอกลิงก์นี้", url); }
     };
-    history.replaceState(null, "", shareUrl());
+    history.replaceState(null, "", shareUrl() + (preview ? "&draft=1" : ""));
     if (scroll) el.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
@@ -247,6 +256,7 @@
       document.body.style.overflow = "";
       try { this.wake && this.wake.release(); } catch { /* ignore */ }
       this.wake = null;
+      if (pending) { const c = pending; pending = null; useContent(c, true); }
     },
     async keepAwake() {
       try { if ("wakeLock" in navigator) this.wake = await navigator.wakeLock.request("screen"); } catch { /* ignore */ }
@@ -357,10 +367,41 @@
     if (!$("#tour").hidden && document.visibilityState === "visible") Tour.keepAwake();
   });
 
-  renderGroups();
-  renderDurations();
-  renderLang();
-  renderResult();
+  /* ---------- โหลดข้อมูลบทนำชม ----------
+   * 1) ใช้สำเนาที่เก็บไว้ในเครื่อง (เปิดได้ทันที/ออฟไลน์)
+   * 2) ดึงข้อมูลล่าสุดจากเซิร์ฟเวอร์ ถ้ามีการแก้ไขจะอัปเดตหน้าให้เอง
+   * 3) ถ้าไม่มีทั้งสองอย่าง ใช้ข้อมูลชุดตั้งต้นใน data.js */
+  let started = false, pending = null, currentKey = "";
+  function renderAll() { renderGroups(); renderDurations(); renderLang(); renderResult(); }
+  function useContent(c, isUpdate) {
+    Content.apply(c);
+    currentKey = Content.key(c);
+    if (!started) { started = true; initState(); renderAll(); return; }
+    keepValidState(); renderAll();
+    if (isUpdate) toast("อัปเดตบทนำชมเป็นฉบับล่าสุดแล้ว");
+  }
+  async function boot() {
+    if (preview) {
+      const draft = Content.draftGet();
+      const bar = document.createElement("div");
+      bar.className = "preview-bar";
+      bar.textContent = draft ? "👁 ตัวอย่างข้อมูลที่ยังไม่ได้บันทึก (จากหน้าแอดมิน)" : "ไม่พบข้อมูลตัวอย่าง แสดงข้อมูลปัจจุบันแทน";
+      document.body.prepend(bar);
+      if (draft) { useContent(draft); return; }
+    }
+    const cached = Content.cacheGet();
+    if (cached) useContent(cached);
+    const remote = await Content.fetchRemote(cached ? 15000 : 5000);
+    if (remote) {
+      Content.cacheSet(remote);
+      if (Content.key(remote) !== currentKey) {
+        if (started && !$("#tour").hidden) { pending = remote; toast("มีบทนำชมฉบับใหม่ จะใช้หลังจบการนำชม"); }
+        else useContent(remote, started);
+      }
+    }
+    if (!started) useContent(DEFAULT_CONTENT);
+  }
+  boot();
 
   /* ใช้งานออฟไลน์ได้ (เฉพาะเมื่อเปิดผ่าน https หรือ localhost) */
   if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
