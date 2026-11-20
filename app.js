@@ -136,6 +136,7 @@
     $("#venueStep").hidden = !show;
     $("#numGroup").textContent = show ? "2" : "1";
     $("#numDur").textContent = show ? "3" : "2";
+    $("#heroLead").textContent = `${show ? "เลือกสถานที่ กลุ่มผู้เยี่ยมชม และเวลา" : "เลือกกลุ่มผู้เยี่ยมชมและเวลา"} ระบบจะจัดเส้นทาง พร้อมบทนำชมที่เหมาะสมให้ทันที`;
     if (!show) return;
     $("#venueGrid").innerHTML = opts.map((o) => {
       const vs = o.parts.map((p) => VENUES[p]);
