@@ -4,7 +4,7 @@
  *   (เมื่ออัปเดต data.js บน GitHub ผู้ใช้จะได้ข้อมูลใหม่ทันทีที่ออนไลน์)
  * - ฟอนต์: ใช้สำเนาที่เก็บไว้ก่อน
  */
-const CACHE = "kulib-tour-v3";
+const CACHE = "kulib-tour-v4";
 const ASSETS = ["./", "index.html", "styles.css", "app.js", "config.js", "data.js", "content.js", "icon.svg", "icon-192.png", "manifest.webmanifest"];
 
 self.addEventListener("install", (e) => {

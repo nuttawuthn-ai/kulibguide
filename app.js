@@ -9,21 +9,49 @@
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const paras = (s) => String(s).split(/\n\n+/).map((p) => `<p>${esc(p).replace(/\n/g, "<br />")}</p>`).join("");
 
-  const state = { group: null, duration: null, start: "", lang: "th" };
+  /* venue = รหัสสถานที่ หรือการนำชมต่อเนื่อง "library>history" · dur = เวลาที่เลือกของแต่ละสถานที่ */
+  const state = { venue: null, group: null, dur: {}, start: "", lang: "th" };
 
   /* ---------- init state from URL or last use ---------- */
   const params = new URLSearchParams(location.search);
   const preview = params.has("draft");
   const pick = (v, ok) => (ok(v) ? v : null);
+  const parts = (v) => (v ? String(v).split(">") : []);
+  /* สถานที่ที่ให้เลือก: เฉพาะที่เปิดแสดง (ตอนดูตัวอย่างจากหน้าแอดมิน แสดงทุกแห่ง) + การนำชมต่อเนื่องทุกลำดับ */
+  const visibleVenues = () => Object.keys(VENUES).filter((id) => preview || VENUES[id].published);
+  function venueOptions() {
+    const ids = visibleVenues();
+    const opts = ids.map((id) => ({ key: id, parts: [id] }));
+    if (ids.length > 1) ids.forEach((a) => ids.forEach((b) => { if (a !== b) opts.push({ key: `${a}>${b}`, parts: [a, b] }); }));
+    return opts;
+  }
+  const validVenue = (k) => venueOptions().some((o) => o.key === k);
+  const validDur = (vid, d) => !!VENUES[vid] && VENUES[vid].durations.includes(d);
+  const ready = () => !!(state.venue && state.group && parts(state.venue).every((p) => state.dur[p]));
+  const readJson = (k) => { try { return JSON.parse(store.get(k) || "null"); } catch { return null; } };
+
   function initState() {
+    const opts = venueOptions();
+    state.venue = pick(params.get("p"), validVenue) || pick(store.get("p"), validVenue) || (opts.length === 1 ? opts[0].key : null);
+    if (!state.venue && params.get("t") && validVenue("library")) state.venue = "library"; /* ลิงก์รุ่นเก่า ?g=&t= */
     state.group = pick(params.get("g"), (v) => GROUPS[v]) || pick(store.get("g"), (v) => GROUPS[v]);
-    state.duration = pick(Number(params.get("t")), (v) => DURATIONS.includes(v)) || pick(Number(store.get("t")), (v) => DURATIONS.includes(v));
+    const saved = readJson("dur") || {};
+    if (!saved.library && store.get("t")) saved.library = Number(store.get("t"));
+    state.dur = {};
+    Object.keys(VENUES).forEach((id) => { if (validDur(id, Number(saved[id]))) state.dur[id] = Number(saved[id]); });
+    if (state.venue && params.get("t")) {
+      const ts = params.get("t").split(",").map(Number);
+      parts(state.venue).forEach((p, i) => { if (validDur(p, ts[i])) state.dur[p] = ts[i]; });
+    }
     state.lang = pick(params.get("l"), (v) => v === "th" || v === "en") || pick(store.get("l"), (v) => v === "th" || v === "en") || "th";
   }
-  /* หลังได้ข้อมูลชุดใหม่: ล้างค่าที่เลือกไว้ถ้ากลุ่ม/เวลานั้นไม่มีแล้ว */
+  /* หลังได้ข้อมูลชุดใหม่: ล้างค่าที่เลือกไว้ถ้าสถานที่/กลุ่ม/เวลานั้นไม่มีแล้ว */
   function keepValidState() {
+    const opts = venueOptions();
+    if (state.venue && !validVenue(state.venue)) state.venue = null;
+    if (!state.venue && opts.length === 1) state.venue = opts[0].key;
     if (state.group && !GROUPS[state.group]) state.group = null;
-    if (state.duration && !DURATIONS.includes(state.duration)) state.duration = null;
+    Object.keys(state.dur).forEach((id) => { if (!validDur(id, state.dur[id])) delete state.dur[id]; });
   }
 
   const now = new Date();
@@ -38,35 +66,59 @@
     const t = (h * 60 + mi + m) % 1440;
     return `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`;
   };
-  const locLabel = (s) => `${BUILDINGS[s.building].th} · ชั้น ${s.floor}`;
+  const locLabel = (s) => (s.travel ? `ไป${BUILDINGS[s.building].th}` : `${BUILDINGS[s.building].th} · ชั้น ${s.floor}`);
 
   /* คำแนะนำการเดินระหว่างจุด คำนวณจากอาคาร/ชั้น */
-  const vert = (from, to) => (to > from ? `ขึ้นลิฟต์ไปชั้น ${to}` : from - to === 1 ? `ลงบันไดไปชั้น ${to}` : `ลงลิฟต์ไปชั้น ${to}`);
+  const vert = (bld, from, to) => (BUILDINGS[bld].stepWords === "plain"
+    ? (to > from ? `ขึ้นไปชั้น ${to}` : `ลงไปชั้น ${to}`)
+    : (to > from ? `ขึ้นลิฟต์ไปชั้น ${to}` : from - to === 1 ? `ลงบันไดไปชั้น ${to}` : `ลงลิฟต์ไปชั้น ${to}`));
   function moveText(a, b) {
     const steps = [];
-    if (a.building === b.building) {
-      if (a.floor !== b.floor) steps.push(vert(a.floor, b.floor));
+    if (a.travel) {
+      steps.push(`ลงรถที่${BUILDINGS[b.building].full}`);
+      if (b.floor !== 1) steps.push(vert(b.building, 1, b.floor));
+    } else if (a.building === b.building) {
+      if (a.floor !== b.floor) steps.push(vert(a.building, a.floor, b.floor));
     } else {
       const linkF = a.floor === 1 && b.floor === 1 ? 1 : 2;
-      if (a.building !== "bridge" && a.floor !== linkF) steps.push(vert(a.floor, linkF));
+      if (a.building !== "bridge" && a.floor !== linkF) steps.push(vert(a.building, a.floor, linkF));
       if (b.building === "bridge") steps.push(`เดินไปทางเชื่อมอาคาร ชั้น ${linkF}`);
       else if (a.building === "bridge") steps.push(`เข้า${BUILDINGS[b.building].th}`);
       else steps.push(`เดินทางเชื่อมชั้น ${linkF} ไป${BUILDINGS[b.building].th}`);
-      if (b.building !== "bridge" && b.floor !== linkF) steps.push(vert(linkF, b.floor));
+      if (b.building !== "bridge" && b.floor !== linkF) steps.push(vert(b.building, linkF, b.floor));
     }
     return steps.join(" → ") || "เดินต่อในบริเวณเดียวกัน";
   }
 
+  /* เส้นทาง = จุดของแต่ละสถานที่ต่อกัน คั่นด้วยช่วงเดินทางโดยรถ
+     จุดปิดท้าย (closing) ใช้เฉพาะของสถานที่สุดท้าย */
   const getRoute = () => {
-    if (!state.group || !state.duration) return null;
+    if (!ready()) return null;
+    const ps = parts(state.venue);
+    const items = [];
     let acc = 0, prev = null;
-    return ROUTES[state.group][state.duration].map(([id, min], i) => {
-      const s = STOPS[id];
-      const item = { id, min, i, from: acc, move: prev ? moveText(prev, s) : "", ...s };
-      acc += min; prev = s;
-      return item;
+    const push = (it) => { it.i = items.length; it.from = acc; acc += it.min; items.push(it); prev = it; };
+    ps.forEach((vid, vi) => {
+      const list = (ROUTES[vid][state.group][state.dur[vid]] || []).filter(([id]) => !(STOPS[id].closing && vi < ps.length - 1));
+      if (vi > 0 && list.length) {
+        const dest = VENUES[vid], first = STOPS[list[0][0]];
+        push({
+          id: `_travel-${vid}`, travel: true, venue: vid, min: TRAVEL.minutes, icon: "🚐",
+          name: `เดินทางไป${dest.name}`, en: `Travel to ${dest.en || dest.name}`, building: first.building, floor: 1,
+          move: `ออกจาก${VENUES[ps[vi - 1]].name} ขึ้นรถ`,
+          script: { th: TRAVEL.th.replaceAll("{to}", dest.name), en: TRAVEL.en.replaceAll("{to}", dest.en || dest.name) },
+          facts: [`ประมาณ ${TRAVEL.minutes} นาที`], notes: [], emphasis: {},
+        });
+      }
+      list.forEach(([id, min]) => {
+        const s = STOPS[id];
+        push({ ...s, id, min, venueMin: state.dur[vid], move: prev ? moveText(prev, s) : "" });
+      });
     });
+    return items;
   };
+  const routeTotal = (route) => route.reduce((a, r) => a + r.min, 0);
+  const venueTitle = () => parts(state.venue).map((p) => VENUES[p].name).join(" → ");
   const toast = (msg) => {
     const t = $("#toast");
     t.textContent = msg;
@@ -74,9 +126,32 @@
     clearTimeout(toast._t);
     toast._t = setTimeout(() => t.classList.remove("show"), 2000);
   };
-  const shareUrl = () => `?g=${state.group}&t=${state.duration}&l=${state.lang}`;
+  const shareUrl = () => `?p=${encodeURIComponent(state.venue)}&g=${state.group}&t=${parts(state.venue).map((p) => state.dur[p]).join(",")}&l=${state.lang}`;
 
   /* ---------- selectors ---------- */
+  const venueTone = (vid) => BUILDINGS[Content.buildingsOf(vid)[0]].tone;
+  function renderVenues() {
+    const opts = venueOptions();
+    const show = opts.length > 1;
+    $("#venueStep").hidden = !show;
+    $("#numGroup").textContent = show ? "2" : "1";
+    $("#numDur").textContent = show ? "3" : "2";
+    if (!show) return;
+    $("#venueGrid").innerHTML = opts.map((o) => {
+      const vs = o.parts.map((p) => VENUES[p]);
+      const combo = vs.length > 1;
+      const hidden = o.parts.filter((p) => !VENUES[p].published).length ? " · ยังไม่เปิดแสดง" : "";
+      return `
+      <button type="button" class="group-card tone-${combo ? "sky" : venueTone(o.key)}" role="radio" aria-checked="${state.venue === o.key}" data-p="${esc(o.key)}">
+        <span class="group-icon" aria-hidden="true">${combo ? "🔄" : esc(vs[0].icon)}</span>
+        <span>
+          <span class="group-name">${combo ? `ต่อเนื่อง: ${esc(vs[0].name)} → ${esc(vs[1].name)}` : esc(vs[0].name)}</span><br />
+          <span class="group-en">${combo ? `${esc(vs[0].en)} → ${esc(vs[1].en)}` : esc(vs[0].en)}</span>
+          <span class="group-desc">${combo ? `รวมเดินทางโดยรถประมาณ ${TRAVEL.minutes} นาที` : esc(vs[0].desc)}${hidden}</span>
+        </span>
+      </button>`;
+    }).join("");
+  }
   function renderGroups() {
     $("#groupGrid").innerHTML = Object.entries(GROUPS).map(([id, g]) => `
       <button type="button" class="group-card tone-${g.tone}" role="radio" aria-checked="${state.group === id}" data-g="${id}">
@@ -89,10 +164,16 @@
       </button>`).join("");
   }
   function renderDurations() {
-    $("#durGrid").innerHTML = DURATIONS.map((d) => `
-      <button type="button" class="dur-btn" role="radio" aria-checked="${state.duration === d}" data-t="${d}">
-        <span class="num">${d}</span><span class="unit">นาที${d === FULL_DURATION ? " · ฉบับเต็ม" : ""}</span>
+    const ps = parts(state.venue);
+    if (!ps.length) { $("#durGrid").innerHTML = `<p class="dur-label">เลือกสถานที่ก่อน แล้วจึงเลือกเวลา</p>`; return; }
+    $("#durGrid").innerHTML = ps.map((vid) => {
+      const v = VENUES[vid];
+      const btns = v.durations.map((d) => `
+      <button type="button" class="dur-btn" role="radio" aria-checked="${state.dur[vid] === d}" data-v="${esc(vid)}" data-t="${d}">
+        <span class="num">${d}</span><span class="unit">นาที${d === v.fullDuration ? " · ฉบับเต็ม" : ""}</span>
       </button>`).join("");
+      return ps.length > 1 ? `<div class="dur-label">${esc(v.icon)} ${esc(v.name)}</div>${btns}` : btns;
+    }).join("");
   }
   function renderLang() {
     document.querySelectorAll("[data-lang]").forEach((b) => b.setAttribute("aria-checked", String(b.dataset.lang === state.lang)));
@@ -104,6 +185,13 @@
     if (!$("#tour").hidden) Tour.render(true);
   }
 
+  $("#venueGrid").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-p]");
+    if (!b) return;
+    state.venue = b.dataset.p;
+    store.set("p", state.venue);
+    renderVenues(); renderDurations(); renderResult(true);
+  });
   $("#groupGrid").addEventListener("click", (e) => {
     const b = e.target.closest("[data-g]");
     if (!b) return;
@@ -114,8 +202,8 @@
   $("#durGrid").addEventListener("click", (e) => {
     const b = e.target.closest("[data-t]");
     if (!b) return;
-    state.duration = Number(b.dataset.t);
-    store.set("t", state.duration);
+    state.dur[b.dataset.v] = Number(b.dataset.t);
+    store.set("dur", JSON.stringify(state.dur));
     renderDurations(); renderResult(true);
   });
   document.addEventListener("click", (e) => {
@@ -130,7 +218,7 @@
 
   function stopBody(r, g, inTour) {
     const label = `บทนำชม · ${state.lang === "th" ? "ภาษาไทย" : "English"}`;
-    const text = String(r.script[state.lang]).replaceAll("{min}", state.duration);
+    const text = String(r.script[state.lang]).replaceAll("{min}", r.venueMin || "");
     const script = inTour
       ? `<div class="script" lang="${state.lang}"><span class="script-label">${label}</span>${paras(text)}</div>`
       : `<details class="script-box"${isWide() ? " open" : ""}>
@@ -139,7 +227,7 @@
          </details>`;
     const openNotes = inTour;
     return `
-      <div class="emphasis"><span>🎯 เน้นสำหรับ${esc(GROUPS[g].name)}</span>${esc(r.emphasis[g])}</div>
+      ${r.emphasis && r.emphasis[g] ? `<div class="emphasis"><span>🎯 เน้นสำหรับ${esc(GROUPS[g].name)}</span>${esc(r.emphasis[g])}</div>` : ""}
       ${script}
       ${r.facts && r.facts.length ? `<div class="facts">${r.facts.map((f) => `<span class="fact">${esc(f)}</span>`).join("")}</div>` : ""}
       ${r.link && /^https?:\/\//i.test(r.link.url) ? `<a class="ext-link" href="${esc(r.link.url)}" target="_blank" rel="noopener">🔗 ${esc(r.link.label)}</a>` : ""}
@@ -154,25 +242,28 @@
     const el = $("#result");
     const route = getRoute();
     if (!route) {
-      const need = !state.group ? "กลุ่มผู้เยี่ยมชม" : "เวลานำชม";
+      const need = !state.venue ? "สถานที่" : !state.group ? "กลุ่มผู้เยี่ยมชม" : "เวลานำชม";
       el.innerHTML = `<div class="empty"><div class="em">🧭</div>เลือก${need} เพื่อดูบทนำชมและเส้นทางที่แนะนำ</div>`;
       return;
     }
     const g = GROUPS[state.group];
-    const blds = [...new Set(route.map((r) => r.building).filter((b) => b !== "bridge"))].map((b) => BUILDINGS[b].th);
-    const end = addMin(state.start, state.duration);
+    const blds = [...new Set(route.filter((r) => !r.travel).map((r) => r.building).filter((b) => b !== "bridge"))].map((b) => BUILDINGS[b].th);
+    const total = routeTotal(route);
+    const end = addMin(state.start, total);
+    const ps = parts(state.venue);
 
     el.innerHTML = `
       <div class="summary fade-in">
         <div class="summary-top">
           <div class="summary-icon" aria-hidden="true">${g.icon}</div>
           <div>
-            <h2>บทนำชม: ${esc(g.name)} · ${state.duration} นาที</h2>
+            <h2>บทนำชม: ${esc(venueTitle())} · ${esc(g.name)} · ${total} นาที</h2>
             <div class="sub">${esc(g.en)} — ${esc(g.desc)}</div>
           </div>
         </div>
         <div class="stats">
-          <span class="stat">📍 ${route.length} จุด</span>
+          <span class="stat">📍 ${route.filter((r) => !r.travel).length} จุด</span>
+          ${ps.length > 1 ? `<span class="stat">🧭 ${ps.map((p) => `${esc(VENUES[p].icon)} ${state.dur[p]}`).join(" + ")} + 🚐 ${TRAVEL.minutes} นาที</span>` : ""}
           <span class="stat">🏢 ${blds.join(" + ")}</span>
           ${state.start ? `<span class="stat">🕒 ${state.start} – ${end} น.</span>` : ""}
           <span class="stat">🗣 ${state.lang === "th" ? "ภาษาไทย" : "English"}</span>
@@ -219,7 +310,7 @@
         </aside>
       </div>
       <div class="mobile-bar">
-        <button class="btn primary" id="startTour2">▶ เริ่มโหมดนำชม · ${state.duration} นาที</button>
+        <button class="btn primary" id="startTour2">▶ เริ่มโหมดนำชม · ${total} นาที</button>
       </div>`;
 
     $("#startTour").onclick = $("#startTour2").onclick = () => Tour.open(route);
@@ -242,7 +333,7 @@
   const Tour = {
     route: [], idx: 0, stopSec: 0, totalSec: 0, paused: false, timer: null, wake: null,
     open(route) {
-      Object.assign(this, { route, idx: 0, stopSec: 0, totalSec: 0, paused: false });
+      Object.assign(this, { route, idx: 0, stopSec: 0, totalSec: 0, paused: false, total: routeTotal(route) });
       $("#tour").hidden = false;
       document.body.style.overflow = "hidden";
       this.render();
@@ -290,8 +381,8 @@
       tt.textContent = this.fmt(left);
       tt.classList.toggle("over", over);
       $("#timerSub").textContent = over ? "เกินเวลาที่วางแผนไว้" : `เหลือเวลาที่จุดนี้ (จาก ${r.min} นาที)`;
-      const planned = state.duration * 60;
-      $("#tourClock").textContent = `${this.fmt(this.totalSec)} / ${state.duration}:00`;
+      const planned = this.total * 60;
+      $("#tourClock").textContent = `${this.fmt(this.totalSec)} / ${this.total}:00`;
       $("#tourClock").style.color = this.totalSec > planned ? "#c66a3b" : "";
     },
     render(keepScroll) {
@@ -372,7 +463,7 @@
    * 2) ดึงข้อมูลล่าสุดจากเซิร์ฟเวอร์ ถ้ามีการแก้ไขจะอัปเดตหน้าให้เอง
    * 3) ถ้าไม่มีทั้งสองอย่าง ใช้ข้อมูลชุดตั้งต้นใน data.js */
   let started = false, pending = null, currentKey = "";
-  function renderAll() { renderGroups(); renderDurations(); renderLang(); renderResult(); }
+  function renderAll() { renderVenues(); renderGroups(); renderDurations(); renderLang(); renderResult(); }
   function useContent(c, isUpdate) {
     Content.apply(c);
     currentKey = Content.key(c);

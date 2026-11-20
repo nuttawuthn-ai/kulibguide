@@ -19,7 +19,8 @@
   let meta = {};             // { savedAt, editor, row }
   let work = null;           // ข้อมูลที่กำลังแก้ไข
   let tab = "stops";
-  let sel = 0;               // จุดนำชมที่เลือก
+  let sel = 0;               // จุดนำชมที่เลือก (ลำดับใน work.stops)
+  let venueSel = "library";  // สถานที่ที่กำลังแก้ในแท็บจุดนำชม/เส้นทาง
   let historyItems = null;
 
   const toast = (msg) => {
@@ -35,6 +36,17 @@
     return isNaN(d) ? s : d.toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" });
   };
   const locLabel = (s) => `${BUILDINGS[s.building] ? BUILDINGS[s.building].th : ""} · ชั้น ${s.floor}`;
+  const venueOf = (id) => work.venues.find((v) => v.id === id) || work.venues[0];
+  /* จุดของสถานที่ที่เลือก: [stop, ลำดับใน work.stops] */
+  const vStops = () => work.stops.map((st, i) => [st, i]).filter(([st]) => st.venue === venueSel);
+  function fixSel() {
+    if (!work.venues.some((v) => v.id === venueSel)) venueSel = work.venues[0] ? work.venues[0].id : "library";
+    const vs = vStops();
+    if (!vs.some(([, i]) => i === sel)) sel = vs.length ? vs[0][1] : -1;
+  }
+  function venueSwitch() {
+    return `<div class="venue-switch" role="group" aria-label="เลือกสถานที่ที่จะแก้">${work.venues.map((v) => `<button type="button" data-act="venue" data-v="${esc(v.id)}" aria-pressed="${v.id === venueSel}">${esc(v.icon)} ${esc(v.name)}${v.published ? "" : ` <span class="pill warn">ยังไม่เปิดแสดง</span>`}</button>`).join("")}</div>`;
+  }
   const linesVal = (a) => (a || []).join("\n");
 
   /* ปุ่มที่ต้องกดสองครั้งเพื่อยืนยัน (แทนกล่องยืนยันของเบราว์เซอร์) */
@@ -85,7 +97,7 @@
     server = Content.normalize(content || DEFAULT_CONTENT);
     meta = m;
     work = clone(server);
-    sel = 0; historyItems = null;
+    sel = 0; historyItems = null; venueSel = work.venues[0] ? work.venues[0].id : "library";
     $("#login").hidden = true;
     $("#app").hidden = false;
     $("#savebar").hidden = false;
@@ -176,36 +188,39 @@
   /* ---------- จุดนำชม ---------- */
   function routeSummary(s) {
     const chips = [];
-    work.groups.forEach((g) => work.durations.forEach((d) => {
-      const m = work.routes[g.id] && work.routes[g.id][d] && work.routes[g.id][d][s.id];
+    const v = venueOf(s.venue), R = work.routes[v.id] || {};
+    work.groups.forEach((g) => v.durations.forEach((d) => {
+      const m = R[g.id] && R[g.id][d] && R[g.id][d][s.id];
       if (m > 0) chips.push(`<span class="mini tone-${g.tone}">${esc(g.icon)} ${d} น. · ${m}′</span>`);
     }));
     return chips.length ? chips.join("") : `<span class="muted">ยังไม่อยู่ในเส้นทางใด</span>`;
   }
   function stopListHtml() {
-    return work.stops.map((s, i) => `
+    const vs = vStops();
+    return vs.map(([s, i], k) => `
       <li class="${i === sel ? "on" : ""}">
         <button type="button" class="stop-item" data-act="sel" data-i="${i}" aria-current="${i === sel}">
           <span class="ico">${esc(s.icon)}</span>
           <span class="txt"><b>${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ""}${esc(s.name || "(ยังไม่มีชื่อ)")}</b><small>${esc(locLabel(s))}</small></span>
         </button>
         <span class="mv">
-          <button type="button" data-act="up" data-i="${i}" aria-label="เลื่อนขึ้น" ${i === 0 ? "disabled" : ""}>▲</button>
-          <button type="button" data-act="down" data-i="${i}" aria-label="เลื่อนลง" ${i === work.stops.length - 1 ? "disabled" : ""}>▼</button>
+          <button type="button" data-act="up" data-i="${i}" aria-label="เลื่อนขึ้น" ${k === 0 ? "disabled" : ""}>▲</button>
+          <button type="button" data-act="down" data-i="${i}" aria-label="เลื่อนลง" ${k === vs.length - 1 ? "disabled" : ""}>▼</button>
         </span>
       </li>`).join("");
   }
   function stopsHtml() {
-    if (!work.stops.length) return `<div class="card empty-card">ยังไม่มีจุดนำชม <button type="button" class="btn primary sm" data-act="addStop">＋ เพิ่มจุดแรก</button></div>`;
-    sel = Math.max(0, Math.min(sel, work.stops.length - 1));
+    fixSel();
+    if (sel < 0) return `${venueSwitch()}<div class="card empty-card">${esc(venueOf(venueSel).name)} ยังไม่มีจุดนำชม <button type="button" class="btn primary sm" data-act="addStop">＋ เพิ่มจุดแรก</button></div>`;
     const s = work.stops[sel];
-    const bOpts = Object.entries(BUILDINGS).map(([k, b]) => `<option value="${k}" ${s.building === k ? "selected" : ""}>${esc(b.full)}</option>`).join("");
+    const bOpts = Content.buildingsOf(s.venue).map((k) => `<option value="${k}" ${s.building === k ? "selected" : ""}>${esc(BUILDINGS[k].full)}</option>`).join("");
     return `
+    ${venueSwitch()}
     <div class="split">
       <div class="card list-card">
-        <div class="card-head"><h2>จุดนำชม <span class="count">${work.stops.length}</span></h2>
+        <div class="card-head"><h2>จุดนำชม <span class="count">${vStops().length}</span></h2>
           <button type="button" class="btn soft sm" data-act="addStop">＋ เพิ่มจุด</button></div>
-        <p class="hint">ลำดับในรายการ = ลำดับการเดินจริงของทุกเส้นทาง ใช้ ▲▼ เพื่อสลับลำดับ</p>
+        <p class="hint">ลำดับในรายการ = ลำดับการเดินจริงของทุกเส้นทางใน${esc(venueOf(venueSel).name)} ใช้ ▲▼ เพื่อสลับลำดับ</p>
         <ol class="stop-list" id="stopList">${stopListHtml()}</ol>
       </div>
 
@@ -253,6 +268,9 @@
           <label class="field"><span>ลิงก์เพิ่มเติม: URL</span><input data-link="url" type="url" inputmode="url" placeholder="https://" value="${esc(s.link ? s.link.url : "")}" /></label>
         </div>
 
+        <label class="check-row"><input type="checkbox" data-f="closing" ${s.closing ? "checked" : ""} />
+          <span><b>จุดปิดท้าย</b> (ถาม-ตอบ ประเมิน ถ่ายภาพ) — เมื่อนำชมต่อเนื่องหลายสถานที่ จะใช้เฉพาะจุดปิดท้ายของสถานที่สุดท้าย</span></label>
+
         <div class="route-sum"><span>อยู่ในเส้นทาง:</span> <span id="routeChips">${routeSummary(s)}</span>
           <button type="button" class="linkish" data-act="goRoutes">แก้ไขเส้นทาง →</button></div>
       </div>
@@ -260,35 +278,40 @@
   }
 
   /* ---------- เส้นทาง ---------- */
-  function sumOf(g, d) { return Object.values(work.routes[g][d] || {}).reduce((a, b) => a + b, 0); }
-  function sumCell(g, d) {
-    const s = sumOf(g, d);
+  function sumOf(v, g, d) { return Object.values(work.routes[v][g][d] || {}).reduce((a, b) => a + b, 0); }
+  function sumCell(v, g, d) {
+    const s = sumOf(v, g, d);
     const cls = s === d ? "ok" : s > d ? "over" : "under";
     const txt = s === d ? `${s} ✓` : `${s}/${d}`;
-    return `<td class="sum ${cls}" id="sum-${esc(g)}-${d}" title="${s === d ? "ตรงกับเวลานำชม" : s > d ? `เกิน ${s - d} นาที` : `ขาด ${d - s} นาที`}">${txt}</td>`;
+    return `<td class="sum ${cls}" id="sum-${esc(v)}-${esc(g)}-${d}" title="${s === d ? "ตรงกับเวลานำชม" : s > d ? `เกิน ${s - d} นาที` : `ขาด ${d - s} นาที`}">${txt}</td>`;
   }
   function routesHtml() {
-    const D = work.durations.length;
+    fixSel();
+    const V = venueOf(venueSel), vid = V.id, R = work.routes[vid];
+    const D = V.durations.length;
+    const list = vStops().map(([st]) => st);
+    if (!list.length) return `${venueSwitch()}<div class="card empty-card">${esc(V.name)} ยังไม่มีจุดนำชม เพิ่มจุดที่แท็บจุดนำชมก่อน</div>`;
     return `
+    ${venueSwitch()}
     <div class="card">
-      <div class="card-head"><h2>เส้นทางนำชม</h2></div>
+      <div class="card-head"><h2>เส้นทางนำชม · ${esc(V.icon)} ${esc(V.name)}</h2></div>
       <p class="hint">ใส่ <b>จำนวนนาที</b> ในช่องของจุดที่แวะ เว้นว่าง = ไม่แวะ (เหมือนตาราง ✓ ในสคริปต์) · ลำดับการเดินตามลำดับจุด เปลี่ยนลำดับได้ที่แท็บจุดนำชม · แถวล่างสุดคือเวลารวม ต้องเท่ากับเวลานำชม</p>
       <div class="table-scroll">
         <table class="route-table">
           <thead>
             <tr><th rowspan="2" class="stick">จุดนำชม</th>${work.groups.map((g) => `<th colspan="${D}" class="gh tone-${g.tone}">${esc(g.icon)} ${esc(g.name)}</th>`).join("")}</tr>
-            <tr>${work.groups.map(() => work.durations.map((d) => `<th class="dh">${d} น.${d === work.fullDuration ? "<small>เต็ม</small>" : ""}</th>`).join("")).join("")}</tr>
+            <tr>${work.groups.map(() => V.durations.map((d) => `<th class="dh">${d} น.${d === V.fullDuration ? "<small>เต็ม</small>" : ""}</th>`).join("")).join("")}</tr>
           </thead>
           <tbody>
-            ${work.stops.map((s) => `<tr>
-              <th scope="row" class="stick"><span class="ref">${esc(s.ref)}</span>${esc(s.icon)} ${esc(s.name || "(ยังไม่มีชื่อ)")}<small>${esc(locLabel(s))}</small></th>
-              ${work.groups.map((g) => work.durations.map((d) => {
-                const v = work.routes[g.id][d][s.id];
-                return `<td class="${v > 0 ? "on" : ""}"><input type="number" min="0" max="180" inputmode="numeric" aria-label="${esc(g.name)} ${d} นาที · ${esc(s.name)}" data-route="${esc(g.id)}|${d}|${esc(s.id)}" value="${v > 0 ? v : ""}" /></td>`;
+            ${list.map((s) => `<tr>
+              <th scope="row" class="stick"><span class="ref">${esc(s.ref)}</span>${esc(s.icon)} ${esc(s.name || "(ยังไม่มีชื่อ)")}${s.closing ? " 🏁" : ""}<small>${esc(locLabel(s))}</small></th>
+              ${work.groups.map((g) => V.durations.map((d) => {
+                const v = R[g.id][d][s.id];
+                return `<td class="${v > 0 ? "on" : ""}"><input type="number" min="0" max="180" inputmode="numeric" aria-label="${esc(g.name)} ${d} นาที · ${esc(s.name)}" data-route="${esc(vid)}|${esc(g.id)}|${d}|${esc(s.id)}" value="${v > 0 ? v : ""}" /></td>`;
               }).join("")).join("")}
             </tr>`).join("")}
           </tbody>
-          <tfoot><tr><th class="stick">เวลารวม (นาที)</th>${work.groups.map((g) => work.durations.map((d) => sumCell(g.id, d)).join("")).join("")}</tr></tfoot>
+          <tfoot><tr><th class="stick">เวลารวม (นาที)</th>${work.groups.map((g) => V.durations.map((d) => sumCell(vid, g.id, d)).join("")).join("")}</tr></tfoot>
         </table>
       </div>
     </div>`;
@@ -329,26 +352,49 @@
   }
 
   /* ---------- เวลา & เตรียมการ ---------- */
-  function settingsHtml() {
+  function venueCard(v) {
+    const vid = esc(v.id);
     return `
-    <div class="grid g2 top">
-      <div class="card">
-        <div class="card-head"><h2>เวลานำชม</h2></div>
-        <div class="dur-chips">
-          ${work.durations.map((d) => `<span class="dur-chip">${d} นาที${d === work.fullDuration ? " · ฉบับเต็ม" : ""}
-            <button type="button" data-act="delDur" data-d="${d}" aria-label="ลบ ${d} นาที" ${work.durations.length < 2 ? "disabled" : ""}>×</button></span>`).join("")}
+      <div class="card venue-card">
+        <div class="card-head"><h2>${esc(v.icon)} ${esc(v.name || "(ยังไม่มีชื่อ)")}</h2>
+          ${v.published ? `<span class="pill ok">แสดงบนเว็บนำชม</span>` : `<span class="pill warn">ยังไม่เปิดแสดง</span>`}</div>
+        <label class="check-row strong"><input type="checkbox" data-v="${vid}" data-vf="published" ${v.published ? "checked" : ""} />
+          <span><b>แสดงให้เลือกบนเว็บนำชม</b> — ติ๊กเมื่อบทพูดและเส้นทางพร้อมแล้ว (ระหว่างนี้ดูได้ด้วยปุ่มตัวอย่าง)</span></label>
+        <div class="grid g4">
+          <label class="field span2"><span>ชื่อสถานที่</span><input data-v="${vid}" data-vf="name" value="${esc(v.name)}" /></label>
+          <label class="field"><span>ไอคอน</span><input data-v="${vid}" data-vf="icon" value="${esc(v.icon)}" maxlength="8" /></label>
+          <label class="field"><span>ชื่อภาษาอังกฤษ</span><input data-v="${vid}" data-vf="en" value="${esc(v.en)}" /></label>
         </div>
-        <div class="inline-add">
-          <input id="newDur" type="number" min="5" max="180" step="5" inputmode="numeric" placeholder="เช่น 60" aria-label="เพิ่มเวลานำชม (นาที)" />
-          <button type="button" class="btn soft sm" data-act="addDur">＋ เพิ่มเวลา</button>
+        <label class="field"><span>คำอธิบาย (แสดงใต้ชื่อในขั้นเลือกสถานที่)</span><input data-v="${vid}" data-vf="desc" value="${esc(v.desc)}" /></label>
+        <div class="field"><span>เวลานำชมที่ให้เลือก</span>
+          <div class="dur-chips">
+            ${v.durations.map((d) => `<span class="dur-chip">${d} นาที${d === v.fullDuration ? " · ฉบับเต็ม" : ""}
+              <button type="button" data-act="delDur" data-v="${vid}" data-d="${d}" aria-label="ลบ ${d} นาที" ${v.durations.length < 2 ? "disabled" : ""}>×</button></span>`).join("")}
+          </div>
+          <div class="inline-add">
+            <input id="newDur-${vid}" type="number" min="5" max="180" step="5" inputmode="numeric" placeholder="เช่น 60" aria-label="เพิ่มเวลานำชม (นาที)" />
+            <button type="button" class="btn soft sm" data-act="addDur" data-v="${vid}">＋ เพิ่มเวลา</button>
+          </div>
         </div>
         <label class="field"><span>ฉบับเต็ม (แสดงป้าย “ฉบับเต็ม”)</span>
-          <select data-set="fullDuration">${work.durations.map((d) => `<option value="${d}" ${d === work.fullDuration ? "selected" : ""}>${d} นาที</option>`).join("")}</select></label>
+          <select data-v="${vid}" data-vf="fullDuration">${v.durations.map((d) => `<option value="${d}" ${d === v.fullDuration ? "selected" : ""}>${d} นาที</option>`).join("")}</select></label>
         <p class="hint">เพิ่มเวลาใหม่แล้วไปใส่นาทีของแต่ละจุดในแท็บเส้นทาง · ลบเวลาจะลบเส้นทางของเวลานั้นทุกกลุ่ม</p>
+      </div>`;
+  }
+  function settingsHtml() {
+    return `
+    <div class="grid g2 top">${work.venues.map(venueCard).join("")}</div>
+    <div class="grid g2 top">
+      <div class="card">
+        <div class="card-head"><h2>🚐 เดินทางระหว่างสถานที่</h2></div>
+        <p class="hint">ใช้เมื่อนำชมต่อเนื่อง ระบบจะแทรกช่วงเดินทางนี้ระหว่างสองสถานที่ · พิมพ์ <code>{to}</code> แทนชื่อสถานที่ปลายทาง</p>
+        <label class="field"><span>เวลาเดินทาง (นาที)</span><input data-travel="minutes" type="number" min="1" max="60" inputmode="numeric" value="${esc(work.travel.minutes)}" /></label>
+        <label class="field"><span>บทพูดภาษาไทย</span><textarea data-travel="th" rows="3">${esc(work.travel.th)}</textarea></label>
+        <label class="field"><span>บทพูดภาษาอังกฤษ</span><textarea data-travel="en" rows="3" lang="en">${esc(work.travel.en)}</textarea></label>
       </div>
       <div class="card">
         <div class="card-head"><h2>เตรียมก่อนนำชม</h2></div>
-        <label class="field"><span>รายการเช็กลิสต์ <small>(บรรทัดละ 1 ข้อ)</small></span>
+        <label class="field"><span>รายการเช็กลิสต์ <small>(บรรทัดละ 1 ข้อ ใช้ร่วมกันทุกสถานที่)</small></span>
           <textarea data-prep rows="7">${esc(linesVal(work.prep))}</textarea></label>
       </div>
     </div>
@@ -398,6 +444,7 @@
     if (t.dataset.f && s) {
       const f = t.dataset.f;
       if (f === "floor") s.floor = Math.max(1, Number(t.value) || 1);
+      else if (f === "closing") { if (t.checked) s.closing = true; else delete s.closing; }
       else if (f.startsWith("script.")) s.script[f.slice(7)] = t.value;
       else s[f] = t.value;
       $("#stopList").innerHTML = stopListHtml();
@@ -410,11 +457,11 @@
       s.link[t.dataset.link] = t.value;
       if (!s.link.label && !s.link.url) delete s.link;
     } else if (t.dataset.route) {
-      const [g, d, id] = t.dataset.route.split("|");
+      const [vid, g, d, id] = t.dataset.route.split("|");
       const v = Math.max(0, Math.round(Number(t.value) || 0));
-      if (v > 0) work.routes[g][d][id] = v; else delete work.routes[g][d][id];
+      if (v > 0) work.routes[vid][g][d][id] = v; else delete work.routes[vid][g][d][id];
       t.parentElement.classList.toggle("on", v > 0);
-      $(`#sum-${CSS.escape(g)}-${d}`).outerHTML = sumCell(g, Number(d));
+      $(`#sum-${CSS.escape(vid)}-${CSS.escape(g)}-${d}`).outerHTML = sumCell(vid, g, Number(d));
     } else if (t.dataset.gf) {
       work.groups[Number(t.dataset.gi)][t.dataset.gf] = t.value;
       if (t.dataset.gf === "tone" || t.dataset.gf === "icon" || t.dataset.gf === "name") {
@@ -427,9 +474,14 @@
       work.groups[Number(t.dataset.gi)][t.dataset.glines] = t.value.split("\n");
     } else if (t.hasAttribute("data-prep")) {
       work.prep = t.value.split("\n");
-    } else if (t.dataset.set === "fullDuration") {
-      work.fullDuration = Number(t.value);
-      render();
+    } else if (t.dataset.vf) {
+      const v = venueOf(t.dataset.v), f = t.dataset.vf;
+      if (f === "published") { v.published = t.checked; changed(); render(); return; }
+      if (f === "fullDuration") { v.fullDuration = Number(t.value); changed(); render(); return; }
+      v[f] = t.value;
+    } else if (t.dataset.travel) {
+      const f = t.dataset.travel;
+      work.travel[f] = f === "minutes" ? Math.max(1, Math.round(Number(t.value) || 1)) : t.value;
     } else return;
     changed();
   });
@@ -444,14 +496,21 @@
     const act = b.dataset.act;
     const swap = (list, a, c) => { [list[a], list[c]] = [list[c], list[a]]; };
 
+    const neighbor = (dir) => { const vs = vStops().map(([, k]) => k); const at = vs.indexOf(i); return vs[at + dir]; };
+    if (act === "venue") { venueSel = b.dataset.v; sel = -1; fixSel(); render(); return; }
     if (act === "sel") { sel = i; render(); if (matchMedia("(max-width: 900px)").matches) $("#stopForm").scrollIntoView({ behavior: "smooth", block: "start" }); return; }
-    if (act === "up" && i > 0) { swap(work.stops, i, i - 1); if (sel === i) sel--; else if (sel === i - 1) sel++; }
-    else if (act === "down" && i < work.stops.length - 1) { swap(work.stops, i, i + 1); if (sel === i) sel++; else if (sel === i + 1) sel--; }
-    else if (act === "addStop") {
-      const s = Content.normalize({ groups: work.groups, stops: [{ id: uid("s"), name: "", icon: "📍", building: "new", floor: 1, script: { th: "", en: "" } }] }).stops[0];
-      work.stops.splice(sel + 1, 0, s);
-      sel = Math.min(sel + 1, work.stops.length - 1);
-      if (work.stops.length === 1) sel = 0;
+    if (act === "up" || act === "down") {
+      const j = neighbor(act === "up" ? -1 : 1);
+      if (j == null) return;
+      swap(work.stops, i, j);
+      if (sel === i) sel = j; else if (sel === j) sel = i;
+    } else if (act === "addStop") {
+      const s = { id: uid("s"), venue: venueSel, name: "", en: "", ref: "", icon: "📍", building: Content.buildingsOf(venueSel)[0], floor: 1,
+        script: { th: "", en: "" }, facts: [], notes: [], emphasis: Object.fromEntries(work.groups.map((g) => [g.id, ""])) };
+      const vs = vStops();
+      const at = sel >= 0 ? sel + 1 : vs.length ? vs[vs.length - 1][1] + 1 : work.stops.length;
+      work.stops.splice(at, 0, s);
+      sel = at;
       toast("เพิ่มจุดใหม่แล้ว อย่าลืมกำหนดนาทีในแท็บเส้นทาง");
     } else if (act === "dupStop") {
       const s = clone(work.stops[sel]);
@@ -463,14 +522,14 @@
       if (!armed(b)) return;
       const id = work.stops[sel].id;
       work.stops.splice(sel, 1);
-      Object.values(work.routes).forEach((byD) => Object.values(byD).forEach((r) => delete r[id]));
-      sel = Math.max(0, sel - 1);
+      Object.values(work.routes).forEach((byG) => Object.values(byG).forEach((byD) => Object.values(byD).forEach((r) => delete r[id])));
+      sel = -1;
       toast("ลบจุดนำชมแล้ว");
     } else if (act === "goRoutes") { tab = "routes"; render(); return; }
     else if (act === "addGroup") {
       const id = uid("g");
       work.groups.push({ id, name: "กลุ่มใหม่", en: "", icon: "👥", tone: TONES[work.groups.length % TONES.length], desc: "", focus: [], tips: [] });
-      work.routes[id] = Object.fromEntries(work.durations.map((d) => [d, {}]));
+      work.venues.forEach((v) => { work.routes[v.id][id] = Object.fromEntries(v.durations.map((d) => [d, {}])); });
       work.stops.forEach((s) => { s.emphasis[id] = ""; });
       toast("เพิ่มกลุ่มแล้ว อย่าลืมกำหนดเส้นทางในแท็บเส้นทาง");
     } else if (act === "gUp" && i > 0) swap(work.groups, i, i - 1);
@@ -479,22 +538,24 @@
       if (!armed(b)) return;
       const id = work.groups[i].id;
       work.groups.splice(i, 1);
-      delete work.routes[id];
+      work.venues.forEach((v) => { delete work.routes[v.id][id]; });
       work.stops.forEach((s) => { delete s.emphasis[id]; });
       toast("ลบกลุ่มแล้ว");
     } else if (act === "addDur") {
-      const d = Math.round(Number($("#newDur").value));
+      const v = venueOf(b.dataset.v);
+      const d = Math.round(Number($(`#newDur-${CSS.escape(v.id)}`).value));
       if (!(d > 0)) { toast("ใส่จำนวนนาทีก่อน"); return; }
-      if (work.durations.includes(d)) { toast(`มี ${d} นาทีอยู่แล้ว`); return; }
-      work.durations = [...work.durations, d].sort((a, c) => a - c);
-      work.groups.forEach((g) => { work.routes[g.id][d] = {}; });
-      toast(`เพิ่ม ${d} นาทีแล้ว ไปกำหนดเส้นทางในแท็บเส้นทาง`);
+      if (v.durations.includes(d)) { toast(`มี ${d} นาทีอยู่แล้ว`); return; }
+      v.durations = [...v.durations, d].sort((a, c) => a - c);
+      work.groups.forEach((g) => { work.routes[v.id][g.id][d] = {}; });
+      toast(`เพิ่ม ${d} นาทีให้${v.name}แล้ว ไปกำหนดเส้นทางในแท็บเส้นทาง`);
     } else if (act === "delDur") {
       if (!armed(b)) return;
+      const v = venueOf(b.dataset.v);
       const d = Number(b.dataset.d);
-      work.durations = work.durations.filter((x) => x !== d);
-      work.groups.forEach((g) => { delete work.routes[g.id][d]; });
-      if (work.fullDuration === d) work.fullDuration = work.durations[work.durations.length - 1];
+      v.durations = v.durations.filter((x) => x !== d);
+      work.groups.forEach((g) => { delete work.routes[v.id][g.id][d]; });
+      if (v.fullDuration === d) v.fullDuration = v.durations[v.durations.length - 1];
     } else if (act === "export") { exportFile(); return; }
     else if (act === "resetDefault") {
       if (!armed(b)) return;
@@ -537,7 +598,8 @@
   $("#previewBtn").onclick = () => {
     Content.draftSet(Content.normalize(work));
     const g = work.groups[0] ? work.groups[0].id : "";
-    window.open(`./?draft=1&g=${encodeURIComponent(g)}&t=${work.fullDuration}`, "_blank", "noopener");
+    const v = venueOf(venueSel);
+    window.open(`./?draft=1&p=${encodeURIComponent(v.id)}&g=${encodeURIComponent(g)}&t=${v.fullDuration}`, "_blank", "noopener");
   };
 
   const dlg = $("#saveDlg");

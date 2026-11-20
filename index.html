@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>KU Library Tour Guide | ระบบช่วยนำชม สำนักหอสมุด มก.</title>
-  <meta name="description" content="ระบบช่วยนำชมสำนักหอสมุด มหาวิทยาลัยเกษตรศาสตร์ เลือกกลุ่มผู้เยี่ยมชมและเวลา แล้วรับบทนำชมพร้อมเส้นทางที่เหมาะสม" />
+  <meta name="description" content="ระบบช่วยนำชมสำนักหอสมุดและหอประวัติ มหาวิทยาลัยเกษตรศาสตร์ เลือกสถานที่ กลุ่มผู้เยี่ยมชม และเวลา แล้วรับบทนำชมพร้อมเส้นทางที่เหมาะสม" />
   <meta name="theme-color" content="#006664" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="mobile-web-app-capable" content="yes" />
@@ -40,9 +40,17 @@
       <p>เลือกกลุ่มผู้เยี่ยมชมและเวลา ระบบจะจัดเส้นทาง พร้อมบทนำชมที่เหมาะสมให้ทันที</p>
     </section>
 
-    <section class="card step" aria-labelledby="step1">
+    <section class="card step" id="venueStep" aria-labelledby="step0" hidden>
       <div class="step-head">
         <span class="step-num">1</span>
+        <h2 id="step0">เลือกสถานที่</h2>
+      </div>
+      <div class="group-grid" id="venueGrid" role="radiogroup" aria-labelledby="step0"></div>
+    </section>
+
+    <section class="card step" aria-labelledby="step1">
+      <div class="step-head">
+        <span class="step-num" id="numGroup">1</span>
         <h2 id="step1">เลือกกลุ่มผู้เยี่ยมชม</h2>
       </div>
       <div class="group-grid" id="groupGrid" role="radiogroup" aria-labelledby="step1"></div>
@@ -50,7 +58,7 @@
 
     <section class="card step" aria-labelledby="step2">
       <div class="step-head">
-        <span class="step-num">2</span>
+        <span class="step-num" id="numDur">2</span>
         <h2 id="step2">เลือกเวลานำชม</h2>
       </div>
       <div class="dur-grid" id="durGrid" role="radiogroup" aria-labelledby="step2"></div>

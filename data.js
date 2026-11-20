@@ -6,20 +6,51 @@
  * ไฟล์นี้ใช้เมื่อยังไม่ได้ตั้งค่า API หรือเปิดเว็บครั้งแรกแบบออฟไลน์
  *
  * โครงสร้าง
- *  durations    : เวลานำชมที่ให้เลือก (นาที)  fullDuration : ฉบับเต็ม
+ *  venues[]     : สถานที่นำชม (published = แสดงบนเว็บนำชม) แต่ละแห่งมี durations / fullDuration ของตัวเอง
+ *  travel       : การเดินทางระหว่างสถานที่ (นาที + บทพูด, {to} = ชื่อสถานที่ปลายทาง)
  *  groups[]     : กลุ่มผู้เยี่ยมชม (id ใช้ในลิงก์ ?g=)
  *  prep[]       : สิ่งที่ต้องเตรียมก่อนนำชม
- *  stops[]      : จุดนำชม เรียงตามเส้นทางจริง  ({min} ในบทพูด = เวลาที่เลือก)
- *  routes       : routes[กลุ่ม][เวลา][จุด] = นาที  (ไม่มี = ไม่แวะจุดนั้น)
+ *  stops[]      : จุดนำชม (venue = สถานที่) เรียงตามเส้นทางจริง  ({min} ในบทพูด = เวลาที่เลือก)
+ *                 closing = จุดปิดท้าย ใช้เฉพาะสถานที่สุดท้ายเมื่อนำชมต่อเนื่อง
+ *  routes       : routes[สถานที่][กลุ่ม][เวลา][จุด] = นาที  (ไม่มี = ไม่แวะจุดนั้น)
  */
 const DEFAULT_CONTENT = {
-  "schema": 1,
-  "durations": [
-    20,
-    30,
-    40
+  "schema": 2,
+  "venues": [
+    {
+      "id": "library",
+      "name": "สำนักหอสมุด",
+      "en": "KU Main Library",
+      "icon": "📚",
+      "desc": "ตึกใหม่ (อาคารเทพรัตน์วิทยาโชติ) และตึกเก่า (อาคารช่วงเกษตรศิลปการ)",
+      "published": true,
+      "durations": [
+        20,
+        30,
+        40
+      ],
+      "fullDuration": 40
+    },
+    {
+      "id": "history",
+      "name": "หอประวัติ มก.",
+      "en": "KU History Hall",
+      "icon": "🏛️",
+      "desc": "หอประวัติมหาวิทยาลัยเกษตรศาสตร์ 2 ชั้น 4 ห้องจัดแสดง",
+      "published": false,
+      "durations": [
+        20,
+        30,
+        40
+      ],
+      "fullDuration": 40
+    }
   ],
-  "fullDuration": 40,
+  "travel": {
+    "minutes": 7,
+    "th": "เดินทางโดยรถไป{to} ระยะทางไม่เกิน 1 กิโลเมตร ใช้เวลาประมาณ 5–7 นาที",
+    "en": "We will now travel by car to {to}. It is less than 1 km away, about 5–7 minutes."
+  },
   "groups": [
     {
       "id": "student",
@@ -98,7 +129,8 @@ const DEFAULT_CONTENT = {
       "emphasis": {
         "exec": "รางวัลและมาตรฐานที่ได้รับ และบริการสนับสนุนการวิจัยครบวงจร",
         "student": "บริการดิจิทัลที่ใช้ได้จากทุกที่ และบริการอัจฉริยะ"
-      }
+      },
+      "venue": "library"
     },
     {
       "id": "welcome",
@@ -127,7 +159,8 @@ const DEFAULT_CONTENT = {
       "emphasis": {
         "exec": "เน้นรางวัลและมาตรฐานที่ได้รับ เป็นภาพรวมความสำเร็จขององค์กร",
         "student": "ตึกใหม่เป็นพื้นที่ทำงาน/อ่านหนังสือ ส่วนหนังสืออยู่ตึกเก่า"
-      }
+      },
+      "venue": "library"
     },
     {
       "id": "meeting",
@@ -153,7 +186,8 @@ const DEFAULT_CONTENT = {
       "emphasis": {
         "exec": "การออกแบบที่คำนึงถึงผู้ใช้วีลแชร์ และพื้นที่ส่งเสริมนวัตกรรม",
         "student": "การขอใช้ห้องประชุมและ Makerspace สำหรับกิจกรรมชมรม"
-      }
+      },
+      "venue": "library"
     },
     {
       "id": "laptop",
@@ -179,7 +213,8 @@ const DEFAULT_CONTENT = {
       "emphasis": {
         "exec": "จำนวนอุปกรณ์ที่ให้บริการ และระบบจองออนไลน์",
         "student": "การยืม Laptop/Tablet และการจองผ่านเว็บไซต์"
-      }
+      },
+      "venue": "library"
     },
     {
       "id": "roof",
@@ -204,7 +239,8 @@ const DEFAULT_CONTENT = {
       "emphasis": {
         "exec": "ตัวอย่างความร่วมมือกับคณะ และพื้นที่รับรองแขก",
         "student": "มุมอ่านหนังสือกลางแจ้งที่ใช้ได้"
-      }
+      },
+      "venue": "library"
     },
     {
       "id": "air",
@@ -230,7 +266,8 @@ const DEFAULT_CONTENT = {
       "emphasis": {
         "exec": "ระบบจัดการพลังงานและผลด้านค่าใช้จ่าย — ใช้เวลาจุดนี้ให้มาก",
         "student": "ชั้นยอดนิยมช่วงสอบ และการดูแลอากาศให้ผู้ใช้"
-      }
+      },
+      "venue": "library"
     },
     {
       "id": "agrohub",
@@ -263,7 +300,8 @@ const DEFAULT_CONTENT = {
       "emphasis": {
         "exec": "บทบาทศูนย์ความรู้ด้านการเกษตร และการเชื่อมผลงานวิจัยสู่สาธารณะ",
         "student": "บรรณารักษ์เฉพาะสาขา กิจกรรมออนไลน์ และห้องศึกษาที่จองได้"
-      }
+      },
+      "venue": "library"
     },
     {
       "id": "edutainment",
@@ -289,7 +327,8 @@ const DEFAULT_CONTENT = {
       "emphasis": {
         "exec": "แนวคิด Edutainment และการใช้ Theatre Room เป็นห้องเรียน",
         "student": "บริการที่ใช้ได้ฟรี กติกาช่วงสอบ และ Theatre Room"
-      }
+      },
+      "venue": "library"
     },
     {
       "id": "boardgame",
@@ -317,7 +356,8 @@ const DEFAULT_CONTENT = {
       "emphasis": {
         "exec": "การนำเทคโนโลยีจดจำใบหน้า/QR มาใช้กับการเข้าห้อง และความต้องการที่นั่งช่วงสอบ",
         "student": "ห้องบอร์ดเกมเป็นห้องอ่านช่วงสอบ และการจองห้องกลุ่ม"
-      }
+      },
+      "venue": "library"
     },
     {
       "id": "bridge",
@@ -345,7 +385,8 @@ const DEFAULT_CONTENT = {
       "emphasis": {
         "exec": "การจัดเก็บทรัพยากรสิ่งพิมพ์ และการขยายเวลาบริการตามความต้องการของผู้ใช้",
         "student": "จำเวลาเปิดช่วงสอบไว้ใช้วางแผนอ่านหนังสือ"
-      }
+      },
+      "venue": "library"
     },
     {
       "id": "ecoFront",
@@ -371,7 +412,8 @@ const DEFAULT_CONTENT = {
       "emphasis": {
         "exec": "จากระบบบัตรรายการสู่การสืบค้นออนไลน์ และแนวคิดวัสดุรีไซเคิล",
         "student": "ปัจจุบันสืบค้นทรัพยากรทั้งหมดผ่านเว็บไซต์ห้องสมุด"
-      }
+      },
+      "venue": "library"
     },
     {
       "id": "eco",
@@ -400,7 +442,8 @@ const DEFAULT_CONTENT = {
       "emphasis": {
         "exec": "นวัตกรรมวัสดุรีไซเคิล และบริการส่งหนังสือถึงผู้ใช้",
         "student": "เสนอซื้อหนังสือ และช่องทางยืมที่สะดวก (ล็อกเกอร์ ไปรษณีย์)"
-      }
+      },
+      "venue": "library"
     },
     {
       "id": "refdesk",
@@ -428,7 +471,8 @@ const DEFAULT_CONTENT = {
       "emphasis": {
         "exec": "เครือข่ายความร่วมมือในประเทศ และการขยายสู่ต่างประเทศ (ธ.ค.)",
         "student": "ปรึกษาบรรณารักษ์ออนไลน์ (EndNote, Turnitin) และการยืมข้ามวิทยาเขต"
-      }
+      },
+      "venue": "library"
     },
     {
       "id": "refdeskShort",
@@ -455,7 +499,8 @@ const DEFAULT_CONTENT = {
       "emphasis": {
         "exec": "เครือข่ายห้องสมุดและการขยายสู่ต่างประเทศ",
         "student": "ปรึกษาบรรณารักษ์ได้หลายช่องทาง และใช้ AI รุ่น Premium ได้ฟรีที่มุมนี้"
-      }
+      },
+      "venue": "library"
     },
     {
       "id": "kulib",
@@ -481,7 +526,8 @@ const DEFAULT_CONTENT = {
       "emphasis": {
         "exec": "กลไกสร้างแรงจูงใจให้นิสิตมีส่วนร่วมกับห้องสมุด",
         "student": "เข้าร่วมกิจกรรมสะสมแต้ม แลกของที่ระลึก"
-      }
+      },
+      "venue": "library"
     },
     {
       "id": "closing",
@@ -507,93 +553,296 @@ const DEFAULT_CONTENT = {
       "emphasis": {
         "exec": "ขอบคุณ เชิญให้ข้อเสนอแนะ และเปิดโอกาสความร่วมมือ",
         "student": "ชวนกลับมาใช้บริการ และติดตามช่องทางออนไลน์"
+      },
+      "venue": "library",
+      "closing": true
+    },
+    {
+      "id": "h-60years",
+      "ref": "H1",
+      "venue": "history",
+      "name": "ห้องสารนิเทศหกทศวรรษ",
+      "en": "Six Decades Information Room",
+      "icon": "📜",
+      "building": "history",
+      "floor": 1,
+      "script": {
+        "th": "ห้องสารนิเทศหกทศวรรษเล่าเรื่องราวความเป็นมาของมหาวิทยาลัยเกษตรศาสตร์ในช่วง 60 ปีแรกของการก่อตั้งมหาวิทยาลัย\n\nเนื้อหาแบ่งออกเป็น 6 ทศวรรษ เพื่อให้เห็นพัฒนาการและการเปลี่ยนแปลงที่สำคัญของมหาวิทยาลัย ลองดูแผนผังประวัติศาสตร์ 6 ทศวรรษ แล้วไล่ดูว่าแต่ละช่วงมีเหตุการณ์สำคัญอะไรบ้าง",
+        "en": "The Six Decades Information Room tells the story of Kasetsart University during the first 60 years after it was founded.\n\nThe exhibition is divided into six decades to show how the university developed and the key changes it went through. Take a look at the six-decade history chart and follow the major milestones of each period."
+      },
+      "facts": [
+        "60 ปีแรกของ มก.",
+        "แบ่งเป็น 6 ทศวรรษ",
+        "แผนผังประวัติศาสตร์ 6 ทศวรรษ"
+      ],
+      "notes": [
+        "หอประวัติ ชั้น 1",
+        "ชี้ให้ดูแผนผังประวัติศาสตร์ 6 ทศวรรษ",
+        "บทพูดร่างจากเว็บไซต์หอประวัติ (archives.lib.ku.ac.th) ตรวจความถูกต้องก่อนใช้จริง"
+      ],
+      "emphasis": {
+        "student": "ภาพรวมประวัติ มก. ใน 60 ปีแรก มหาวิทยาลัยเติบโตมาอย่างไร",
+        "exec": "พัฒนาการและการเปลี่ยนแปลงสำคัญของมหาวิทยาลัยในแต่ละทศวรรษ"
+      },
+      "link": {
+        "label": "แผนผังประวัติศาสตร์ 6 ทศวรรษ (ภาพขยาย)",
+        "url": "https://archives.lib.ku.ac.th/ku-archives/images/ex3-diagram.jpg"
+      }
+    },
+    {
+      "id": "h-exhibit",
+      "ref": "H2",
+      "venue": "history",
+      "name": "ห้องนิทรรศการเกษตรศาสตร์",
+      "en": "Kasetsart Exhibition Room",
+      "icon": "🖼️",
+      "building": "history",
+      "floor": 1,
+      "script": {
+        "th": "ห้องนิทรรศการเกษตรศาสตร์แบ่งการจัดแสดงออกเป็น 6 โซน\n\n• โซน 1 Introduction – แนะนำมหาวิทยาลัยเกษตรศาสตร์\n• โซน 2–3 Timeline – เส้นเวลาเหตุการณ์สำคัญของมหาวิทยาลัย\n• โซน 4 MOU – ความร่วมมือระหว่างมหาวิทยาลัยกับหน่วยงานต่าง ๆ\n• โซน 5 KU Future – ทิศทางของมหาวิทยาลัยในอนาคต\n• โซน 6 Now and Then – เปรียบเทียบมหาวิทยาลัยในอดีตกับปัจจุบัน",
+        "en": "The Kasetsart Exhibition Room is divided into six zones.\n\n• Zone 1, Introduction – an introduction to Kasetsart University\n• Zones 2–3, Timeline – key moments in the university's history\n• Zone 4, MOU – the university's partnerships with other organisations\n• Zone 5, KU Future – where the university is heading\n• Zone 6, Now and Then – the university in the past compared with today"
+      },
+      "facts": [
+        "6 โซน",
+        "Introduction · Timeline · MOU · KU Future · Now and Then"
+      ],
+      "notes": [
+        "หอประวัติ ชั้น 1",
+        "เว็บไซต์มีเพียงชื่อโซน คำอธิบายแต่ละโซนตีความจากชื่อ ควรเติมรายละเอียดจากของจริง",
+        "บทพูดร่างจากเว็บไซต์หอประวัติ (archives.lib.ku.ac.th) ตรวจความถูกต้องก่อนใช้จริง"
+      ],
+      "emphasis": {
+        "student": "โซน Now and Then เปรียบเทียบ มก. ในอดีตกับปัจจุบัน",
+        "exec": "โซน MOU และ KU Future ความร่วมมือและทิศทางของมหาวิทยาลัย"
+      },
+      "link": {
+        "label": "ข้อมูลห้องจัดแสดง (เว็บไซต์หอประวัติ)",
+        "url": "https://archives.lib.ku.ac.th/ku-archives/exhibition.php"
+      }
+    },
+    {
+      "id": "h-founders",
+      "ref": "H3",
+      "venue": "history",
+      "name": "ห้องสามบูรพาจารย์แก้วเกษตร",
+      "en": "Three Founding Teachers Room (Kaew Kaset)",
+      "icon": "🎓",
+      "building": "history",
+      "floor": 2,
+      "script": {
+        "th": "ห้องสามบูรพาจารย์แก้วเกษตรนำเสนอประวัติและผลงานของบูรพาจารย์ 3 ท่าน ได้แก่\n• พระช่วงเกษตรศิลปการ (นายช่วง โลจายะ)\n• หลวงสุวรรณวาจกกสิกิจ (นายทองดี เรศานนท์)\n• หลวงอิงคศรีกสิการ (ศาสตราจารย์พิเศษ อินทรี จันทรสถิตย์)\n\nทั้งสามท่านวางรากฐานการเรียนการสอนด้านการเกษตรในประเทศไทย และร่วมกันก่อตั้งมหาวิทยาลัยเกษตรศาสตร์ รวมทั้งพัฒนาแนวทางการศึกษาด้านการเกษตรที่ยั่งยืน และส่งเสริมการเกษตรของประเทศ",
+        "en": "This room presents the lives and work of three founding teachers:\n• Phra Chuang Kaset Silpakan (Chuang Lochaya)\n• Luang Suwan Wachakkasikit (Thongdee Resanon)\n• Luang Ingkhasrikasikan (Special Professor Intree Chantarasatit)\n\nTogether they laid the foundations of agricultural education in Thailand and co-founded Kasetsart University. They also developed approaches to sustainable agricultural education and promoted agriculture across the country."
+      },
+      "facts": [
+        "บูรพาจารย์ 3 ท่าน",
+        "ผู้ร่วมก่อตั้ง มก.",
+        "วางรากฐานการศึกษาเกษตรของไทย"
+      ],
+      "notes": [
+        "หอประวัติ ชั้น 2",
+        "ถ้าคณะเพิ่งมาจากสำนักหอสมุด ชวนนึกถึงชื่อตึกเก่า \"อาคารช่วงเกษตรศิลปการ\"",
+        "ตรวจการสะกดชื่อบูรพาจารย์ภาษาอังกฤษก่อนใช้",
+        "บทพูดร่างจากเว็บไซต์หอประวัติ (archives.lib.ku.ac.th) ตรวจความถูกต้องก่อนใช้จริง"
+      ],
+      "emphasis": {
+        "student": "ผู้ก่อตั้ง มก. และจุดเริ่มต้นของการศึกษาด้านการเกษตรในไทย",
+        "exec": "บทบาทของบูรพาจารย์ในการวางรากฐานการศึกษาเกษตรของประเทศ"
+      },
+      "link": {
+        "label": "ข้อมูลห้องจัดแสดง (เว็บไซต์หอประวัติ)",
+        "url": "https://archives.lib.ku.ac.th/ku-archives/exhibition.php"
+      }
+    },
+    {
+      "id": "h-royal",
+      "ref": "H4",
+      "venue": "history",
+      "name": "ห้องเย็นศิระเพราะพระบริบาล",
+      "en": "Yen Sira Phro Phra Boriban Room",
+      "icon": "👑",
+      "building": "history",
+      "floor": 2,
+      "script": {
+        "th": "ห้องเย็นศิระเพราะพระบริบาลจัดแสดงเพื่อเฉลิมพระเกียรติและน้อมรำลึกในพระมหากรุณาธิคุณของพระบาทสมเด็จพระบรมชนกาธิเบศร มหาภูมิพลอดุลยเดชมหาราช บรมนาถบพิตร พระบาทสมเด็จพระวชิรเกล้าเจ้าอยู่หัว และพระบรมวงศานุวงศ์ ที่มีต่อมหาวิทยาลัยเกษตรศาสตร์\n\nภายในห้องจัดแสดงภาพการเสด็จฯ มาทรงประกอบพระราชกรณียกิจและโครงการต่าง ๆ ที่มหาวิทยาลัย และผู้เข้าชมยังได้ชมฉลองพระองค์ในรัชกาลที่ 9 และปริญญาบัตรของนิสิตเกษตรศาสตร์รุ่นที่ 1 ได้อย่างใกล้ชิด",
+        "en": "This room honours and commemorates the royal grace shown to Kasetsart University by King Bhumibol Adulyadej the Great (King Rama IX), His Majesty King Vajiralongkorn (King Rama X) and the Royal Family.\n\nIt displays photographs of royal visits to the university for royal duties and projects. Visitors can also see, up close, a royal garment of King Rama IX and the degree certificate of Kasetsart's first graduating class."
+      },
+      "facts": [
+        "ฉลองพระองค์ในรัชกาลที่ 9",
+        "ปริญญาบัตรนิสิตรุ่นที่ 1"
+      ],
+      "notes": [
+        "หอประวัติ ชั้น 2",
+        "ตรวจราชาศัพท์และพระนามก่อนใช้จริง",
+        "บทพูดร่างจากเว็บไซต์หอประวัติ (archives.lib.ku.ac.th) ตรวจความถูกต้องก่อนใช้จริง"
+      ],
+      "emphasis": {
+        "student": "ปริญญาบัตรนิสิตรุ่นที่ 1 และพระมหากรุณาธิคุณต่อ มก.",
+        "exec": "พระราชกรณียกิจและโครงการที่เกี่ยวข้องกับ มก."
+      },
+      "link": {
+        "label": "ข้อมูลห้องจัดแสดง (เว็บไซต์หอประวัติ)",
+        "url": "https://archives.lib.ku.ac.th/ku-archives/exhibition.php"
+      }
+    },
+    {
+      "id": "h-closing",
+      "ref": "H5",
+      "venue": "history",
+      "closing": true,
+      "name": "Wrap-up · ถาม-ตอบ · ประเมิน",
+      "en": "Wrap-up, Q&A & Evaluation",
+      "icon": "💚",
+      "building": "history",
+      "floor": 1,
+      "script": {
+        "th": "การนำชมหอประวัติมหาวิทยาลัยเกษตรศาสตร์ของเราก็มาถึงตอนท้ายแล้ว หวังว่าทุกท่านจะได้รู้จักมหาวิทยาลัยเกษตรศาสตร์มากขึ้น ก่อนจบ มีคำถามหรือเรื่องที่อยากทราบเพิ่มเติมไหม\n\nขอบคุณมากที่มาเยี่ยมชมในวันนี้ ก่อนกลับ รบกวนช่วยทำแบบประเมินสั้น ๆ เพื่อช่วยเราพัฒนาการนำชมให้ดีขึ้น",
+        "en": "That brings us to the end of our tour of the Kasetsart University History Hall. I hope you have learned a little more about our university. Before we finish, do you have any questions?\n\nThank you very much for visiting us today. Before you leave, we would appreciate it if you could fill out a short evaluation form about your experience."
+      },
+      "facts": [
+        "QR Code แบบประเมิน",
+        "ถ่ายภาพหมู่"
+      ],
+      "notes": [],
+      "emphasis": {
+        "student": "ชวนกลับมาใช้บริการ และติดตามช่องทางออนไลน์",
+        "exec": "ขอบคุณ เชิญให้ข้อเสนอแนะ และเปิดโอกาสความร่วมมือ"
       }
     }
   ],
   "routes": {
-    "student": {
-      "20": {
-        "welcome": 3,
-        "meeting": 2,
-        "laptop": 2,
-        "edutainment": 3,
-        "boardgame": 2,
-        "bridge": 2,
-        "refdeskShort": 2,
-        "kulib": 2,
-        "closing": 2
+    "library": {
+      "student": {
+        "20": {
+          "welcome": 3,
+          "meeting": 2,
+          "laptop": 2,
+          "edutainment": 3,
+          "boardgame": 2,
+          "bridge": 2,
+          "refdeskShort": 2,
+          "kulib": 2,
+          "closing": 2
+        },
+        "30": {
+          "welcome": 4,
+          "meeting": 3,
+          "laptop": 2,
+          "agrohub": 3,
+          "edutainment": 4,
+          "boardgame": 2,
+          "bridge": 2,
+          "ecoFront": 2,
+          "eco": 3,
+          "refdeskShort": 2,
+          "kulib": 2,
+          "closing": 1
+        },
+        "40": {
+          "welcome": 4,
+          "meeting": 3,
+          "laptop": 2,
+          "roof": 2,
+          "air": 4,
+          "agrohub": 4,
+          "edutainment": 4,
+          "boardgame": 3,
+          "bridge": 2,
+          "ecoFront": 2,
+          "eco": 4,
+          "refdeskShort": 2,
+          "kulib": 2,
+          "closing": 2
+        }
       },
-      "30": {
-        "welcome": 4,
-        "meeting": 3,
-        "laptop": 2,
-        "agrohub": 3,
-        "edutainment": 4,
-        "boardgame": 2,
-        "bridge": 2,
-        "ecoFront": 2,
-        "eco": 3,
-        "refdeskShort": 2,
-        "kulib": 2,
-        "closing": 1
-      },
-      "40": {
-        "welcome": 4,
-        "meeting": 3,
-        "laptop": 2,
-        "roof": 2,
-        "air": 4,
-        "agrohub": 4,
-        "edutainment": 4,
-        "boardgame": 3,
-        "bridge": 2,
-        "ecoFront": 2,
-        "eco": 4,
-        "refdeskShort": 2,
-        "kulib": 2,
-        "closing": 2
+      "exec": {
+        "20": {
+          "welcome": 3,
+          "meeting": 2,
+          "laptop": 2,
+          "edutainment": 3,
+          "boardgame": 2,
+          "bridge": 2,
+          "refdesk": 3,
+          "kulib": 2,
+          "closing": 1
+        },
+        "30": {
+          "welcomeSlide": 6,
+          "meeting": 2,
+          "laptop": 2,
+          "agrohub": 3,
+          "edutainment": 3,
+          "bridge": 2,
+          "ecoFront": 2,
+          "eco": 3,
+          "refdesk": 3,
+          "kulib": 2,
+          "closing": 2
+        },
+        "40": {
+          "welcomeSlide": 6,
+          "meeting": 2,
+          "laptop": 2,
+          "roof": 2,
+          "air": 5,
+          "agrohub": 4,
+          "edutainment": 3,
+          "boardgame": 2,
+          "bridge": 2,
+          "ecoFront": 2,
+          "eco": 3,
+          "refdesk": 3,
+          "kulib": 2,
+          "closing": 2
+        }
       }
     },
-    "exec": {
-      "20": {
-        "welcome": 3,
-        "meeting": 2,
-        "laptop": 2,
-        "edutainment": 3,
-        "boardgame": 2,
-        "bridge": 2,
-        "refdesk": 3,
-        "kulib": 2,
-        "closing": 1
+    "history": {
+      "student": {
+        "20": {
+          "h-60years": 4,
+          "h-exhibit": 4,
+          "h-founders": 4,
+          "h-royal": 4,
+          "h-closing": 4
+        },
+        "30": {
+          "h-60years": 6,
+          "h-exhibit": 6,
+          "h-founders": 6,
+          "h-royal": 6,
+          "h-closing": 6
+        },
+        "40": {
+          "h-60years": 8,
+          "h-exhibit": 8,
+          "h-founders": 8,
+          "h-royal": 8,
+          "h-closing": 8
+        }
       },
-      "30": {
-        "welcomeSlide": 6,
-        "meeting": 2,
-        "laptop": 2,
-        "agrohub": 3,
-        "edutainment": 3,
-        "bridge": 2,
-        "ecoFront": 2,
-        "eco": 3,
-        "refdesk": 3,
-        "kulib": 2,
-        "closing": 2
-      },
-      "40": {
-        "welcomeSlide": 6,
-        "meeting": 2,
-        "laptop": 2,
-        "roof": 2,
-        "air": 5,
-        "agrohub": 4,
-        "edutainment": 3,
-        "boardgame": 2,
-        "bridge": 2,
-        "ecoFront": 2,
-        "eco": 3,
-        "refdesk": 3,
-        "kulib": 2,
-        "closing": 2
+      "exec": {
+        "20": {
+          "h-60years": 4,
+          "h-exhibit": 4,
+          "h-founders": 4,
+          "h-royal": 4,
+          "h-closing": 4
+        },
+        "30": {
+          "h-60years": 6,
+          "h-exhibit": 6,
+          "h-founders": 6,
+          "h-royal": 6,
+          "h-closing": 6
+        },
+        "40": {
+          "h-60years": 8,
+          "h-exhibit": 8,
+          "h-founders": 8,
+          "h-royal": 8,
+          "h-closing": 8
+        }
       }
     }
   }
