@@ -118,7 +118,7 @@
     if (demo) { el.innerHTML = `<span class="pill warn">โหมดทดลอง</span> ยังไม่ได้เชื่อมต่อ API — แก้ไขและดูตัวอย่างได้ แต่บันทึกขึ้นเว็บไม่ได้ (ใช้ “ดาวน์โหลดไฟล์สำรอง” ในแท็บเวลา & เตรียมการ)`; return; }
     el.innerHTML = meta.savedAt
       ? `ฉบับที่เผยแพร่อยู่: บันทึกเมื่อ <b>${esc(fmtDate(meta.savedAt))}</b> โดย <b>${esc(meta.editor)}</b>`
-      : `<span class="pill warn">ยังไม่เคยบันทึก</span> ตอนนี้เว็บใช้ข้อมูลตั้งต้นจากสคริปต์ rev2 — กดบันทึกครั้งแรกเพื่อเริ่มใช้ระบบแอดมิน`;
+      : `<span class="pill warn">ยังไม่เคยบันทึก</span> ตอนนี้เว็บใช้ข้อมูลตั้งต้นจากสคริปต์ rev2 — กด <b>💾 บันทึก</b> มุมขวาล่างเพื่อเก็บเป็นฉบับแรก`;
   }
 
   function updateBar() {
@@ -131,12 +131,13 @@
       ${v.errors.length ? `<h3>ต้องแก้ก่อนบันทึก</h3><ul class="bad">${v.errors.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
       ${v.warnings.length ? `<h3>ควรตรวจ (บันทึกได้)</h3><ul class="warn">${v.warnings.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
       ${!v.errors.length && !v.warnings.length ? `<p>ไม่พบปัญหา เส้นทางทุกเส้นมีเวลารวมตรงกับเวลานำชม</p>` : ""}`;
-    const dirty = isDirty();
-    $("#dirtyText").textContent = dirty ? "● มีการแก้ไขที่ยังไม่ได้บันทึก" : "ไม่มีการแก้ไข";
+    const first = !demo && !meta.row;   /* ยังไม่เคยบันทึก: ให้กดบันทึกฉบับแรกได้เลย */
+    const dirty = isDirty() || first;
+    $("#dirtyText").textContent = first ? "● ยังไม่เคยบันทึก กดบันทึกเพื่อเริ่มใช้งาน" : dirty ? "● มีการแก้ไขที่ยังไม่ได้บันทึก" : "ไม่มีการแก้ไข";
     $("#dirtyText").classList.toggle("on", dirty);
     $("#saveBtn").disabled = demo || !dirty || v.errors.length > 0;
     $("#saveBtn").title = demo ? "โหมดทดลอง บันทึกไม่ได้" : v.errors.length ? "แก้ข้อที่ต้องแก้ก่อน" : !dirty ? "ยังไม่มีการแก้ไข" : "";
-    $("#discardBtn").hidden = !dirty;
+    $("#discardBtn").hidden = !isDirty();
   }
   $("#checkBtn").onclick = () => {
     const l = $("#checkList");
