@@ -7,7 +7,8 @@
     set(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } },
   };
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-  const paras = (s) => String(s).split(/\n\n+/).map((p) => `<p>${esc(p).replace(/\n/g, "<br />")}</p>`).join("");
+  /* บทพูด: แยกย่อหน้า + ตัวหนา/สี/ไฮไลต์ (content.js → Rich) */
+  const paras = (s) => Rich.paras(s);
 
   /* venue = รหัสสถานที่ หรือการนำชมต่อเนื่อง "library>history" · dur = เวลาที่เลือกของแต่ละสถานที่ */
   const state = { venue: null, group: null, dur: {}, start: "", lang: "th" };

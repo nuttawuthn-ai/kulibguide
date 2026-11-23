@@ -349,3 +349,10 @@ input, select, textarea { font-size: 16px; } /* ป้องกัน iOS ซู
   .stop-photos.n3 .photo:first-child, .stop-photos.n5 .photo:first-child { grid-column: 1 / -1; aspect-ratio: 16 / 9; }
 }
 @media print { .lightbox { display: none !important; } .stop-photos { grid-template-columns: repeat(3, 1fr); } .photo { aspect-ratio: 4 / 3; max-height: 120px; } .photo-cap { display: none; } }
+
+/* รูปแบบตัวอักษรในบทพูด (ตั้งจากหน้าแอดมิน) */
+.script strong, .rich-area strong, .rich-area b { font-weight: 700; color: inherit; }
+.tc-red { color: #c62828; } .tc-blue { color: #1565c0; } .tc-green { color: #2e7d32; } .tc-orange { color: #d84315; } .tc-purple { color: #6a1b9a; }
+mark[class^="hl-"] { color: inherit; padding: 0 .15em; border-radius: 3px; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+.hl-yellow { background: #fff176; } .hl-green { background: #c8f7c5; } .hl-pink { background: #ffcdd2; } .hl-blue { background: #cfe8ff; }
+@media print { mark[class^="hl-"], [class^="tc-"] { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }

@@ -245,11 +245,9 @@
         </div>
         <p class="hint">อาคาร/ชั้นใช้คำนวณคำแนะนำการเดินระหว่างจุดให้อัตโนมัติ (เช่น “ขึ้นลิฟต์ไปชั้น 4”)</p>
 
-        <label class="field"><span>บทพูดภาษาไทย</span>
-          <textarea data-f="script.th" rows="10">${esc(s.script.th)}</textarea></label>
-        <label class="field"><span>บทพูดภาษาอังกฤษ</span>
-          <textarea data-f="script.en" rows="10" lang="en">${esc(s.script.en)}</textarea></label>
-        <p class="hint">เว้นบรรทัดว่าง 1 บรรทัด = ขึ้นย่อหน้าใหม่ · พิมพ์ <code>{min}</code> แทนเวลานำชมที่ผู้นำชมเลือก (เช่น “ประมาณ {min} นาที”)</p>
+        <div class="field"><span id="lbl-script-th">บทพูดภาษาไทย</span>${richEditor("script.th", s.script.th, "th")}</div>
+        <div class="field"><span id="lbl-script-en">บทพูดภาษาอังกฤษ</span>${richEditor("script.en", s.script.en, "en")}</div>
+        <p class="hint"><b>จัดรูปแบบ:</b> ลากเลือกข้อความ แล้วกดปุ่มด้านบนช่อง (ตัวหนา · สีตัวอักษร · ไฮไลต์) · ⌫ ล้างรูปแบบ = กลับเป็นตัวอักษรปกติ · Ctrl+B = ตัวหนา<br />เว้นบรรทัดว่าง 1 บรรทัด = ขึ้นย่อหน้าใหม่ · พิมพ์ <code>{min}</code> แทนเวลานำชมที่ผู้นำชมเลือก (เช่น “ประมาณ {min} นาที”)</p>
 
         <div class="grid g2">
           <label class="field"><span>ตัวเลข/ข้อมูลสำคัญ <small>(บรรทัดละ 1 ข้อ)</small></span>
@@ -277,6 +275,37 @@
           <button type="button" class="linkish" data-act="goRoutes">แก้ไขเส้นทาง →</button></div>
       </div>
     </div>`;
+  }
+
+  /* ---------- ช่องบทพูดแบบจัดรูปแบบได้ (ตัวหนา สี ไฮไลต์) ---------- */
+  function richEditor(field, value, lang) {
+    const id = field.replace(".", "-");
+    /* แสดงด้วย inline style เพื่อให้ปุ่ม "ล้างรูปแบบ" ของเบราว์เซอร์ลบได้ทุกแบบ */
+    const html = Rich.editorHtml(value)
+      .replace(/<strong>/g, "<b>").replace(/<\/strong>/g, "</b>")
+      .replace(/<span class="tc-(\w+)">/g, (m, k) => `<span style="color: ${RICH_COLORS[k]}">`)
+      .replace(/<mark class="hl-(\w+)">([\s\S]*?)<\/mark>/g, (m, k, inner) => `<span style="background-color: ${RICH_HILITES[k]}">${inner}</span>`);
+    return `
+      <div class="rich" data-rich="${field}">
+        <div class="rich-bar" role="toolbar" aria-label="รูปแบบตัวอักษร ${lang === "th" ? "บทพูดภาษาไทย" : "บทพูดภาษาอังกฤษ"}">
+          <button type="button" class="rb" data-cmd="bold" title="ตัวหนา (Ctrl+B)"><b>B</b> ตัวหนา</button>
+          <span class="rb-group"><span class="rb-lbl">สีตัวอักษร</span>${Object.entries(RICH_COLORS).map(([k, hex]) => `<button type="button" class="sw sw-c" data-cmd="color" data-v="${k}" style="--sw: ${hex}" title="สี${RICH_NAMES.c[k]}" aria-label="สีตัวอักษร${RICH_NAMES.c[k]}">A</button>`).join("")}</span>
+          <span class="rb-group"><span class="rb-lbl">ไฮไลต์</span>${Object.entries(RICH_HILITES).map(([k, hex]) => `<button type="button" class="sw sw-h" data-cmd="hilite" data-v="${k}" style="--sw: ${hex}" title="ไฮไลต์${RICH_NAMES.h[k]}" aria-label="ไฮไลต์${RICH_NAMES.h[k]}"></button>`).join("")}</span>
+          <button type="button" class="rb" data-cmd="clear" title="ล้างรูปแบบของข้อความที่เลือก">⌫ ล้างรูปแบบ</button>
+        </div>
+        <div class="rich-area" contenteditable="true" role="textbox" aria-multiline="true" aria-labelledby="lbl-${id}" data-f="${field}" lang="${lang}" spellcheck="false">${html}</div>
+      </div>`;
+  }
+  function richCommand(btn) {
+    const area = btn.closest(".rich").querySelector(".rich-area");
+    const sel = window.getSelection();
+    const inside = sel.rangeCount && area.contains(sel.getRangeAt(0).commonAncestorContainer);
+    if (!inside || sel.isCollapsed) { toast("ลากเลือกข้อความในช่องบทพูดก่อน แล้วจึงกดปุ่ม"); area.focus(); return; }
+    const cmd = btn.dataset.cmd, v = btn.dataset.v;
+    if (cmd === "bold") { document.execCommand("styleWithCSS", false, false); document.execCommand("bold"); }
+    else if (cmd === "color") { document.execCommand("styleWithCSS", false, true); document.execCommand("foreColor", false, RICH_COLORS[v]); }
+    else if (cmd === "hilite") { document.execCommand("styleWithCSS", false, true); if (!document.execCommand("hiliteColor", false, RICH_HILITES[v])) document.execCommand("backColor", false, RICH_HILITES[v]); }
+    else if (cmd === "clear") { document.execCommand("removeFormat"); document.execCommand("unlink"); }
   }
 
   /* ---------- ภาพจุดนำชม ---------- */
@@ -543,7 +572,7 @@
       const f = t.dataset.f;
       if (f === "floor") s.floor = Math.max(1, Number(t.value) || 1);
       else if (f === "closing") { if (t.checked) s.closing = true; else delete s.closing; }
-      else if (f.startsWith("script.")) s.script[f.slice(7)] = t.value;
+      else if (f.startsWith("script.")) s.script[f.slice(7)] = t.isContentEditable ? Rich.fromEditor(t) : t.value;
       else s[f] = t.value;
       $("#stopList").innerHTML = stopListHtml();
     } else if (t.dataset.lines && s) {
@@ -587,6 +616,17 @@
     } else return;
     changed();
   });
+  /* แถบรูปแบบ: กดแล้วไม่ให้ข้อความที่เลือกหลุด */
+  panel.addEventListener("mousedown", (e) => { if (e.target.closest(".rich-bar button")) e.preventDefault(); });
+  panel.addEventListener("click", (e) => { const b = e.target.closest(".rich-bar button"); if (b) richCommand(b); });
+  /* วางข้อความ: รับเฉพาะตัวอักษร (ไม่เอารูปแบบ/ฟอนต์จาก Word หรือเว็บ) */
+  panel.addEventListener("paste", (e) => {
+    if (!e.target.closest || !e.target.closest(".rich-area")) return;
+    e.preventDefault();
+    const text = (e.clipboardData || window.clipboardData).getData("text/plain");
+    document.execCommand("insertText", false, text);
+  });
+  panel.addEventListener("drop", (e) => { if (e.target.closest && e.target.closest(".rich-area")) e.preventDefault(); });
   panel.addEventListener("change", (e) => {
     if (e.target.id === "importFile") importFile(e.target.files[0]);
     if (e.target.id === "imgFile") { uploadFiles(e.target.files); e.target.value = ""; }

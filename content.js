@@ -229,3 +229,103 @@ const Content = (() => {
     draftClear: () => store.del(DRAFT_KEY),
   };
 })();
+
+/*
+ * รูปแบบตัวอักษรในบทพูด (ตัวหนา สีตัวอักษร ไฮไลต์)
+ * เก็บเป็นข้อความธรรมดาพร้อมป้ายกำกับสั้น ๆ:
+ *   **ตัวหนา**   [c=red]สีแดง[/c]   [h=yellow]ไฮไลต์เหลือง[/h]
+ * หน้าแอดมินแปลงป้ายเหล่านี้เป็นตัวอักษรที่เห็นจริงให้แก้ได้ทันที (ไม่ต้องพิมพ์ป้ายเอง)
+ */
+const RICH_COLORS = { red: "#c62828", blue: "#1565c0", green: "#2e7d32", orange: "#d84315", purple: "#6a1b9a" };
+const RICH_HILITES = { yellow: "#fff176", green: "#c8f7c5", pink: "#ffcdd2", blue: "#cfe8ff" };
+const RICH_NAMES = {
+  c: { red: "แดง", blue: "น้ำเงิน", green: "เขียว", orange: "ส้ม", purple: "ม่วง" },
+  h: { yellow: "เหลือง", green: "เขียว", pink: "ชมพู", blue: "ฟ้า" },
+};
+
+const Rich = (() => {
+  const escH = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const C = Object.keys(RICH_COLORS).join("|"), H = Object.keys(RICH_HILITES).join("|");
+  const reB = /\*\*([\s\S]+?)\*\*/g;
+  const reC = new RegExp(`\\[c=(${C})\\]([\\s\\S]*?)\\[\\/c\\]`, "g");
+  const reH = new RegExp(`\\[h=(${H})\\]([\\s\\S]*?)\\[\\/h\\]`, "g");
+
+  /* ข้อความ 1 ย่อหน้า → HTML (ปลอดภัย: escape ก่อนแปลงป้าย) */
+  function inline(text) {
+    return escH(text)
+      .replace(reB, "<strong>$1</strong>")
+      .replace(reC, '<span class="tc-$1">$2</span>')
+      .replace(reH, '<mark class="hl-$1">$2</mark>')
+      .replace(/\n/g, "<br />");
+  }
+  /* ทั้งบทพูด → ย่อหน้า <p> (เว้นบรรทัดว่าง = ย่อหน้าใหม่) */
+  const paras = (s) => String(s).split(/\n\n+/).map((p) => `<p>${inline(p)}</p>`).join("");
+  /* ตัดป้ายออก เหลือข้อความล้วน */
+  const plain = (s) => String(s).replace(reB, "$1").replace(reC, "$2").replace(reH, "$2");
+
+  /* ---- ช่องแก้ไขในหน้าแอดมิน (contenteditable) ---- */
+  const editorHtml = (text) => String(text || "").split("\n")
+    .map((line) => (line ? `<div>${inline(line)}</div>` : "<div><br></div>")).join("") || "<div><br></div>";
+
+  const rgb = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+  const parseColor = (s) => { const m = String(s).match(/\d+(\.\d+)?/g); return m && m.length >= 3 ? m.slice(0, 3).map(Number) : null; };
+  function nearest(css, table) {
+    const v = parseColor(css);
+    if (!v) return "";
+    let best = "", bd = 1e9;
+    Object.entries(table).forEach(([k, hex]) => {
+      const d = rgb(hex).reduce((a, x, i) => a + (x - v[i]) ** 2, 0);
+      if (d < bd) { bd = d; best = k; }
+    });
+    return bd < 60 * 60 * 3 ? best : "";
+  }
+  function fmtOf(node, root) {
+    let b = false, c = "", h = "";
+    for (let el = node.parentElement; el && el !== root; el = el.parentElement) {
+      const st = el.style, tag = el.tagName;
+      if (!b && (tag === "B" || tag === "STRONG" || st.fontWeight === "bold" || Number(st.fontWeight) >= 600)) b = true;
+      if (!c) c = (el.className.match(/\btc-(\w+)/) || [])[1] || (st.color ? nearest(st.color, RICH_COLORS) : "") || (tag === "FONT" && el.color ? nearest(`rgb(${rgb(el.color)})`, RICH_COLORS) : "");
+      if (!h) h = (el.className.match(/\bhl-(\w+)/) || [])[1] || (st.backgroundColor ? nearest(st.backgroundColor, RICH_HILITES) : "") || (tag === "MARK" ? "yellow" : "");
+    }
+    if (c && !RICH_COLORS[c]) c = "";
+    if (h && !RICH_HILITES[h]) h = "";
+    return { b, c, h };
+  }
+  /* อ่านช่องแก้ไข → ข้อความพร้อมป้าย */
+  function fromEditor(root) {
+    const parts = []; /* { t, b, c, h } | "\n" | "blk" */
+    const walk = (n) => {
+      n.childNodes.forEach((ch) => {
+        if (ch.nodeType === 3) {
+          const f = fmtOf(ch, root);
+          ch.nodeValue.replace(/ /g, " ").split("\n").forEach((seg, i) => { if (i) parts.push("\n"); if (seg) parts.push({ t: seg, ...f }); });
+        } else if (ch.nodeName === "BR") parts.push("\n");
+        else if (ch.nodeType === 1) {
+          const block = /^(DIV|P|LI|H[1-6]|BLOCKQUOTE)$/.test(ch.nodeName);
+          if (block) parts.push("blk");
+          walk(ch);
+          if (block) parts.push("blk");
+        }
+      });
+    };
+    walk(root);
+    let out = "", run = null;
+    const flush = () => {
+      if (!run) return;
+      let t = run.t;
+      if (run.b && t.trim()) t = `**${t}**`;
+      if (run.c && t.trim()) t = `[c=${run.c}]${t}[/c]`;
+      if (run.h && t.trim()) t = `[h=${run.h}]${t}[/h]`;
+      out += t; run = null;
+    };
+    parts.forEach((p) => {
+      if (p === "blk") { flush(); if (out && !out.endsWith("\n")) out += "\n"; return; }
+      if (p === "\n") { flush(); out += "\n"; return; }
+      if (run && run.b === p.b && run.c === p.c && run.h === p.h) run.t += p.t;
+      else { flush(); run = { ...p }; }
+    });
+    flush();
+    return out.replace(/\n+$/, "");
+  }
+  return { inline, paras, plain, editorHtml, fromEditor };
+})();
