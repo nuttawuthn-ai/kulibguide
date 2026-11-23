@@ -201,7 +201,7 @@
       <li class="${i === sel ? "on" : ""}">
         <button type="button" class="stop-item" data-act="sel" data-i="${i}" aria-current="${i === sel}">
           <span class="ico">${esc(s.icon)}</span>
-          <span class="txt"><b>${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ""}${esc(s.name || "(ยังไม่มีชื่อ)")}</b><small>${esc(locLabel(s))}</small></span>
+          <span class="txt"><b>${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ""}${esc(s.name || "(ยังไม่มีชื่อ)")}</b><small>${esc(locLabel(s))}${s.images && s.images.length ? ` · 📷 ${s.images.length}` : ""}</small></span>
         </button>
         <span class="mv">
           <button type="button" data-act="up" data-i="${i}" aria-label="เลื่อนขึ้น" ${k === 0 ? "disabled" : ""}>▲</button>
@@ -268,6 +268,8 @@
           <label class="field"><span>ลิงก์เพิ่มเติม: URL</span><input data-link="url" type="url" inputmode="url" placeholder="https://" value="${esc(s.link ? s.link.url : "")}" /></label>
         </div>
 
+        ${photosHtml(s)}
+
         <label class="check-row"><input type="checkbox" data-f="closing" ${s.closing ? "checked" : ""} />
           <span><b>จุดปิดท้าย</b> (ถาม-ตอบ ประเมิน ถ่ายภาพ) — เมื่อนำชมต่อเนื่องหลายสถานที่ จะใช้เฉพาะจุดปิดท้ายของสถานที่สุดท้าย</span></label>
 
@@ -276,6 +278,102 @@
       </div>
     </div>`;
   }
+
+  /* ---------- ภาพจุดนำชม ---------- */
+  function photosHtml(s) {
+    const imgs = s.images || [];
+    const full = imgs.length >= MAX_IMAGES;
+    const noUpload = demo || full;
+    return `
+        <fieldset class="fs photos-fs" id="photoBox">
+          <legend>📷 ภาพจุดนำชม <small>(${imgs.length}/${MAX_IMAGES})</small></legend>
+          ${imgs.length ? `<div class="photo-edit-list">${imgs.map((im, k) => `
+            <div class="photo-edit">
+              <div class="thumb"><img src="${esc(im.src)}" data-fid="${esc(im.id || "")}" alt="" referrerpolicy="no-referrer" loading="lazy" />${k === 0 ? `<span class="cover">ภาพหลัก</span>` : ""}</div>
+              <input data-img-cap="${k}" value="${esc(im.caption)}" placeholder="คำบรรยายภาพ (ไม่บังคับ)" aria-label="คำบรรยายภาพที่ ${k + 1}" />
+              <div class="photo-edit-actions">
+                <button type="button" data-act="imgLeft" data-k="${k}" ${k === 0 ? "disabled" : ""} aria-label="เลื่อนไปก่อน">◀</button>
+                <button type="button" data-act="imgRight" data-k="${k}" ${k === imgs.length - 1 ? "disabled" : ""} aria-label="เลื่อนไปหลัง">▶</button>
+                <button type="button" class="del" data-act="imgDel" data-k="${k}" aria-label="ลบภาพ">🗑</button>
+              </div>
+            </div>`).join("")}</div>` : `<p class="hint">ยังไม่มีภาพ ภาพช่วยให้ผู้นำชมเห็นจุดยืนและสิ่งที่ต้องชี้ให้ผู้เยี่ยมชมดู</p>`}
+          <div class="photo-add">
+            <label class="btn soft sm file-btn${noUpload ? " is-disabled" : ""}">⬆ อัปโหลดภาพ<input type="file" accept="image/jpeg,image/png,image/webp" multiple id="imgFile" hidden ${noUpload ? "disabled" : ""} /></label>
+            <span class="or">หรือ</span>
+            <input id="imgUrl" type="url" inputmode="url" placeholder="วางลิงก์ภาพ https://…" aria-label="ลิงก์ภาพ" ${full ? "disabled" : ""} />
+            <button type="button" class="btn ghost sm" data-act="imgAddUrl" ${full ? "disabled" : ""}>＋ เพิ่มลิงก์</button>
+          </div>
+          <p class="hint" id="imgStatus">${demo ? "โหมดทดลองอัปโหลดไม่ได้ ใช้ลิงก์ภาพแทน" : full ? `ครบ ${MAX_IMAGES} ภาพแล้ว ลบภาพเดิมก่อนจึงเพิ่มได้` : "เลือกได้หลายภาพพร้อมกัน ระบบย่อภาพให้ด้านยาวไม่เกิน 1600 px ก่อนส่ง · ภาพแรกคือภาพหลัก · กดบันทึกแล้วภาพจึงขึ้นเว็บนำชม"}</p>
+        </fieldset>`;
+  }
+  function refreshPhotos() {
+    const box = $("#photoBox");
+    if (box && work.stops[sel]) box.outerHTML = photosHtml(work.stops[sel]);
+    const list = $("#stopList");
+    if (list) list.innerHTML = stopListHtml();
+  }
+  /* ลิงก์แชร์ของ Google Drive → ลิงก์ภาพที่แสดงบนเว็บได้ */
+  function imageFromUrl(u) {
+    const m = u.match(/drive\.google\.com\/(?:file\/d\/|open\?id=|uc\?(?:export=\w+&)?id=)([\w-]{20,})/);
+    return m ? { src: `https://lh3.googleusercontent.com/d/${m[1]}`, caption: "", id: m[1] } : { src: u, caption: "" };
+  }
+  /* ย่อภาพในเบราว์เซอร์ก่อนส่ง: ด้านยาว ≤ 1600 px, JPEG */
+  async function shrink(file) {
+    let bmp;
+    try { bmp = await createImageBitmap(file); } catch { bmp = null; }
+    if (!bmp) throw new Error(`เปิดไฟล์ ${file.name} ไม่ได้ (ไฟล์ HEIC จาก iPhone ให้แปลงเป็น JPG ก่อน)`);
+    const scale = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
+    const w = Math.round(bmp.width * scale), h = Math.round(bmp.height * scale);
+    const cv = document.createElement("canvas");
+    cv.width = w; cv.height = h;
+    const cx = cv.getContext("2d");
+    cx.fillStyle = "#fff"; cx.fillRect(0, 0, w, h);
+    cx.drawImage(bmp, 0, 0, w, h);
+    if (bmp.close) bmp.close();
+    const blob = await new Promise((res) => cv.toBlob(res, "image/jpeg", 0.82));
+    return new Promise((res, rej) => {
+      const fr = new FileReader();
+      fr.onload = () => res(String(fr.result).split(",")[1]);
+      fr.onerror = () => rej(new Error("อ่านไฟล์ภาพไม่สำเร็จ"));
+      fr.readAsDataURL(blob);
+    });
+  }
+  async function uploadFiles(files) {
+    const s = work.stops[sel];
+    if (!s) return;
+    const stopId = s.id;
+    const list = [...files].filter((f) => /^image\//.test(f.type) || /\.(jpe?g|png|webp|heic)$/i.test(f.name));
+    const room = MAX_IMAGES - (s.images || []).length;
+    if (!list.length || room <= 0) return;
+    if (list.length > room) toast(`เพิ่มได้อีก ${room} ภาพ จะอัปโหลดเฉพาะ ${room} ภาพแรก`);
+    const todo = list.slice(0, room);
+    const status = (t) => { const el = $("#imgStatus"); if (el) el.textContent = t; };
+    const fileBtn = $(".photos-fs .file-btn");
+    if (fileBtn) fileBtn.classList.add("is-busy");
+    let done = 0;
+    for (const f of todo) {
+      status(`⏳ กำลังอัปโหลด ${done + 1}/${todo.length}: ${f.name} …`);
+      try {
+        const data = await shrink(f);
+        const r = await Content.call({ action: "upload", pin, name: `${f.name.replace(/\.[^.]+$/, "")}.jpg`, mime: "image/jpeg", data }, 90000);
+        const st = work.stops.find((x) => x.id === stopId);
+        if (!st) break;
+        st.images = [...(st.images || []), { src: r.url, caption: "", id: r.id }];
+        done++;
+        changed();
+        if (work.stops[sel] && work.stops[sel].id === stopId) refreshPhotos();
+      } catch (e) { toast(e.message); }
+    }
+    status(done ? `✓ อัปโหลดแล้ว ${done} ภาพ ใส่คำบรรยายได้ แล้วกดบันทึกเพื่อให้ขึ้นเว็บนำชม` : "อัปโหลดไม่สำเร็จ ลองใหม่อีกครั้ง");
+    if (done) toast(`อัปโหลดแล้ว ${done} ภาพ (ยังไม่ได้บันทึก)`);
+  }
+  /* ภาพจาก Google Drive โหลดไม่ขึ้น → ลองลิงก์ภาพย่อสำรอง */
+  document.addEventListener("error", (e) => {
+    const img = e.target;
+    if (img.tagName !== "IMG" || !img.dataset.fid || img.dataset.tried) return;
+    img.dataset.tried = "1";
+    img.src = driveThumb(img.dataset.fid);
+  }, true);
 
   /* ---------- เส้นทาง ---------- */
   function sumOf(v, g, d) { return Object.values(work.routes[v][g][d] || {}).reduce((a, b) => a + b, 0); }
@@ -452,6 +550,10 @@
       s[t.dataset.lines] = t.value.split("\n");
     } else if (t.dataset.emph != null && s) {
       s.emphasis[t.dataset.emph] = t.value;
+    } else if (t.dataset.imgCap != null && s && s.images) {
+      s.images[Number(t.dataset.imgCap)].caption = t.value;
+    } else if (t.id === "imgUrl") {
+      return;
     } else if (t.dataset.link && s) {
       s.link = s.link || { label: "", url: "" };
       s.link[t.dataset.link] = t.value;
@@ -487,6 +589,7 @@
   });
   panel.addEventListener("change", (e) => {
     if (e.target.id === "importFile") importFile(e.target.files[0]);
+    if (e.target.id === "imgFile") { uploadFiles(e.target.files); e.target.value = ""; }
   });
 
   panel.addEventListener("click", (e) => {
@@ -526,6 +629,19 @@
       sel = -1;
       toast("ลบจุดนำชมแล้ว");
     } else if (act === "goRoutes") { tab = "routes"; render(); return; }
+    else if (act === "imgLeft" || act === "imgRight" || act === "imgDel") {
+      const st = work.stops[sel], k = Number(b.dataset.k);
+      if (!st || !st.images) return;
+      if (act === "imgDel") { if (!armed(b)) return; st.images.splice(k, 1); if (!st.images.length) delete st.images; toast("ลบภาพแล้ว (ยังไม่ได้บันทึก)"); }
+      else { const j = act === "imgLeft" ? k - 1 : k + 1; [st.images[k], st.images[j]] = [st.images[j], st.images[k]]; }
+      changed(); refreshPhotos(); return;
+    } else if (act === "imgAddUrl") {
+      const st = work.stops[sel], u = ($("#imgUrl").value || "").trim();
+      if (!st) return;
+      if (!/^https:\/\//i.test(u)) { toast("ลิงก์ภาพต้องขึ้นต้นด้วย https://"); return; }
+      st.images = [...(st.images || []), imageFromUrl(u)].slice(0, MAX_IMAGES);
+      changed(); refreshPhotos(); toast("เพิ่มภาพแล้ว (ยังไม่ได้บันทึก)"); return;
+    }
     else if (act === "addGroup") {
       const id = uid("g");
       work.groups.push({ id, name: "กลุ่มใหม่", en: "", icon: "👥", tone: TONES[work.groups.length % TONES.length], desc: "", focus: [], tips: [] });

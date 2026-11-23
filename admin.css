@@ -195,3 +195,25 @@ dialog .notice.warn { margin: 0 0 4px; font-size: .84rem; }
 .check-row input { width: 18px; height: 18px; margin-top: 2px; accent-color: var(--ku); flex: 0 0 auto; }
 .check-row b { color: var(--ink); font-weight: 600; }
 .check-row.strong { background: var(--ku-50); border: 1px solid var(--ku-200); border-radius: 12px; padding: 10px 12px; }
+
+/* ภาพจุดนำชม */
+.photos-fs { padding-bottom: 6px; }
+.photos-fs legend small { font-weight: 400; color: var(--muted); }
+.photo-edit-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; margin: 6px 0 12px; }
+.photo-edit { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: #fff; display: flex; flex-direction: column; }
+.photo-edit .thumb { position: relative; aspect-ratio: 4 / 3; background: var(--ku-50); }
+.photo-edit .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.photo-edit .cover { position: absolute; top: 6px; left: 6px; font-size: .7rem; font-weight: 600; background: var(--ku); color: #fff; border-radius: 999px; padding: 2px 8px; }
+.photo-edit input { border: 0; border-top: 1px solid var(--line); padding: 8px 10px; font: inherit; font-size: .84rem; min-width: 0; }
+.photo-edit input:focus { outline: 2px solid var(--ku-200); outline-offset: -2px; }
+.photo-edit-actions { display: flex; border-top: 1px solid var(--line); }
+.photo-edit-actions button { flex: 1; border: 0; background: transparent; padding: 7px 0; font-size: .8rem; color: var(--muted); }
+.photo-edit-actions button + button { border-left: 1px solid var(--line); }
+.photo-edit-actions button:hover:not(:disabled) { background: var(--ku-50); color: var(--ku); }
+.photo-edit-actions button:disabled { opacity: .3; }
+.photo-edit-actions .del[data-armed="1"] { background: #a8322a; color: #fff; font-size: .7rem; }
+.photo-add { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px; }
+.photo-add input[type="url"] { flex: 1 1 200px; min-width: 0; font: inherit; font-size: .9rem; border: 1px solid #cfe2dd; border-radius: 10px; padding: 7px 10px; }
+.photo-add .or { font-size: .8rem; color: var(--muted); }
+.file-btn.is-disabled { opacity: .45; pointer-events: none; }
+.file-btn.is-busy { opacity: .6; pointer-events: none; }

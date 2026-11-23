@@ -227,8 +227,17 @@
            <div class="script" lang="${state.lang}">${paras(text)}</div>
          </details>`;
     const openNotes = inTour;
+    const imgs = r.images || [];
+    const photos = imgs.length ? `
+      <div class="stop-photos n${imgs.length}">${imgs.map((im) => `
+        <button type="button" class="photo" data-full="${esc(im.src)}" data-fid="${esc(im.id || "")}" data-cap="${esc(im.caption)}" aria-label="ดูภาพ${esc(im.caption ? ` ${im.caption}` : "")}">
+          <img src="${esc(im.src)}" data-fid="${esc(im.id || "")}" alt="${esc(im.caption || r.name)}" loading="lazy" referrerpolicy="no-referrer" />
+          ${im.caption ? `<span class="photo-cap">${esc(im.caption)}</span>` : ""}
+        </button>`).join("")}
+      </div>` : "";
     return `
       ${r.emphasis && r.emphasis[g] ? `<div class="emphasis"><span>🎯 เน้นสำหรับ${esc(GROUPS[g].name)}</span>${esc(r.emphasis[g])}</div>` : ""}
+      ${photos}
       ${script}
       ${r.facts && r.facts.length ? `<div class="facts">${r.facts.map((f) => `<span class="fact">${esc(f)}</span>`).join("")}</div>` : ""}
       ${r.link && /^https?:\/\//i.test(r.link.url) ? `<a class="ext-link" href="${esc(r.link.url)}" target="_blank" rel="noopener">🔗 ${esc(r.link.label)}</a>` : ""}
@@ -449,7 +458,33 @@
   $("#tourPrev").onclick = () => Tour.go(-1);
   $("#tourNext").onclick = () => Tour.go(1);
   $("#tourPause").onclick = () => { Tour.paused = !Tour.paused; $("#tourPause").textContent = Tour.paused ? "▶ ต่อ" : "⏸ พัก"; };
+  /* ---------- ภาพจุดนำชม: ดูเต็มจอ + ลิงก์สำรองของ Google Drive ---------- */
+  const Lightbox = {
+    open(src, fid, cap) {
+      const img = $("#lightboxImg");
+      img.dataset.fid = fid || ""; img.dataset.tried = "";
+      img.src = src; img.alt = cap || "";
+      $("#lightboxCap").textContent = cap || "";
+      $("#lightbox").hidden = false;
+      $("#lightboxClose").focus();
+    },
+    close() { $("#lightbox").hidden = true; $("#lightboxImg").removeAttribute("src"); },
+  };
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest(".photo[data-full]");
+    if (b) { e.preventDefault(); Lightbox.open(b.dataset.full, b.dataset.fid, b.dataset.cap); }
+  });
+  $("#lightbox").addEventListener("click", (e) => { if (e.target.id !== "lightboxImg") Lightbox.close(); });
+  /* ลิงก์หลักโหลดไม่ขึ้น → ลองลิงก์ภาพย่อของ Google Drive อีกครั้ง */
+  document.addEventListener("error", (e) => {
+    const img = e.target;
+    if (img.tagName !== "IMG" || !img.dataset.fid || img.dataset.tried) return;
+    img.dataset.tried = "1";
+    img.src = driveThumb(img.dataset.fid);
+  }, true);
+
   document.addEventListener("keydown", (e) => {
+    if (!$("#lightbox").hidden) { if (e.key === "Escape") Lightbox.close(); return; }
     if ($("#tour").hidden) return;
     if (e.key === "ArrowRight") Tour.go(1);
     else if (e.key === "ArrowLeft") Tour.go(-1);

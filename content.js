@@ -15,6 +15,9 @@ const BUILDINGS = {
 };
 const TONES = ["mint", "lavender", "peach", "butter", "sky"];
 const PLACEHOLDER_MARKS = ["[รอบทพูด]", "[Script pending]"];
+const MAX_IMAGES = 6; /* ภาพสูงสุดต่อจุด */
+/* ลิงก์สำรองของภาพใน Google Drive (ใช้เมื่อลิงก์หลักโหลดไม่ขึ้น) */
+const driveThumb = (id) => `https://drive.google.com/thumbnail?id=${encodeURIComponent(id)}&sz=w1600`;
 
 /* ตัวแปรที่ app.js ใช้ (กำหนดค่าโดย Content.apply) */
 let VENUES = {}, GROUPS = {}, STOPS = {}, ROUTES = {}, PREP = [], TRAVEL = { minutes: 7, th: "", en: "" };
@@ -95,6 +98,13 @@ const Content = (() => {
       };
       if (s.closing) out.closing = true;
       if (link) out.link = link;
+      /* ภาพจุดนำชม: { src (https), caption, id (รหัสไฟล์ Google Drive ถ้าอัปโหลดผ่านหน้าแอดมิน) } */
+      const images = arr(s.images)
+        .map((im) => ({ src: str(im && im.src).trim(), caption: str(im && im.caption), id: str(im && im.id) }))
+        .filter((im) => /^https:\/\//i.test(im.src))
+        .slice(0, MAX_IMAGES)
+        .map((im) => (im.id ? im : { src: im.src, caption: im.caption }));
+      if (images.length) out.images = images;
       return out;
     });
     const routes = {};
