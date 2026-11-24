@@ -328,11 +328,24 @@
         </details>` : ""}`;
   }
 
+  /* เวลารวมหลังปรับ เทียบกับเส้นทางหลัก */
+  function timeInfo() {
+    const route = getRoute() || [];
+    const ps = parts(state.venue);
+    const total = routeTotal(route);
+    let skipMin = 0, skipN = 0;
+    ps.forEach((vid, vi) => arranged(vid, vi, ps.length).forEach((r) => { if (r.skip) { skipMin += r.min; skipN++; } }));
+    return { total, base: total + skipMin, skipMin, skipN, end: addMin(state.start, total) };
+  }
+  const timeLine = (t) => `ใช้เวลาจริง <b>${t.total} นาที</b>${state.start ? ` (${state.start} – ${t.end} น.)` : ""}${t.skipN ? ` · เส้นทางหลัก ${t.base} นาที ข้าม ${t.skipN} จุด −${t.skipMin} นาที` : ""}`;
+
   function reorderHtml() {
     const ps = parts(state.venue);
+    const t = timeInfo();
     return `
       <section class="card reorder fade-in" aria-labelledby="reorderTitle">
         <h3 id="reorderTitle">✏️ ปรับลำดับเฉพาะรอบนี้</h3>
+        <p class="ro-total top">⏱ ${timeLine(t)}</p>
         <p class="ro-hint">กด ▲▼ เพื่อสลับลำดับ หรือกด "ข้าม" ถ้ารอบนี้ไม่แวะจุดนั้น ใช้ได้ในเครื่องนี้ถึงสิ้นวัน และในลิงก์ที่คัดลอกจากหน้านี้ เส้นทางหลักของคนอื่นไม่เปลี่ยน</p>
         ${ps.map((vid, vi) => {
           const rows = arranged(vid, vi, ps.length);
@@ -356,6 +369,7 @@
           }).join("")}</ol>`;
         }).join("")}
         <div class="ro-foot">
+          <p class="ro-total" aria-live="polite">⏱ ${timeLine(t)}</p>
           <button type="button" class="btn ghost" data-ro="reset" ${custom ? "" : "disabled"}>↺ คืนค่าเส้นทางหลัก</button>
           <button type="button" class="btn primary" data-ro="done">✓ เสร็จ</button>
         </div>
@@ -401,7 +415,7 @@
           <button class="btn glass" id="shareBtn">🔗 คัดลอกลิงก์</button>
           <button class="btn glass" data-ro="edit" aria-pressed="${editing}">✏️ ปรับลำดับรอบนี้</button>
         </div>
-        ${custom ? `<div class="custom-note">✏️ รอบนี้ใช้ลำดับที่ปรับเอง${skipped ? ` · ข้าม ${skipped} จุด` : ""} <span>(เฉพาะเครื่องนี้ ไม่กระทบเส้นทางหลัก)</span>
+        ${custom ? `<div class="custom-note">✏️ รอบนี้ใช้ลำดับที่ปรับเอง · ใช้เวลาจริง ${total} นาที${skipped ? ` (เส้นทางหลัก ${timeInfo().base} นาที ข้าม ${skipped} จุด)` : ""} <span>(เฉพาะเครื่องนี้ ไม่กระทบเส้นทางหลัก)</span>
           <button type="button" data-ro="reset">↺ คืนค่าเส้นทางหลัก</button></div>` : ""}
       </div>
       ${editing ? reorderHtml() : ""}

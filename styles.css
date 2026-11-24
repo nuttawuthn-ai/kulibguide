@@ -392,3 +392,7 @@ mark[class^="hl-"] { color: inherit; padding: 0 .15em; border-radius: 3px; -webk
   .custom-note button { display: none; }
 }
 .quiet .fade-in { animation: none !important; }
+.ro-total { margin: 0; padding: 8px 12px; border-radius: 12px; background: var(--butter); color: var(--butter-ink); font-size: .95rem; }
+.ro-total b { font-size: 1.05rem; }
+.ro-total.top { margin: 8px 0 4px; }
+.ro-foot .ro-total { flex: 1 1 260px; align-self: center; }
