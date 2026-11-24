@@ -96,7 +96,8 @@
   /* ---------- ปรับลำดับเฉพาะรอบนี้ ----------
    * ผู้นำชมสลับลำดับ/ข้ามจุดได้เอง เก็บไว้ในเครื่องนี้ถึงสิ้นวัน (และในลิงก์ที่คัดลอก)
    * ไม่ส่งขึ้นเซิร์ฟเวอร์ เส้นทางหลักของคนอื่นจึงไม่เปลี่ยน
-   * custom = { [venueId]: { order: [stopId ตามลำดับใหม่], skip: [stopId ที่ข้าม] } } */
+   * custom = { [venueId]: { order: [stopId ตามลำดับใหม่], skip: [stopId ที่ข้าม], min: { stopId: นาทีที่ปรับ } } } */
+  const MIN_STOP = 1, MAX_STOP = 30;
   let custom = null, editing = false;
   const routeKey = () => `${state.venue}|${state.group}|${parts(state.venue).map((p) => state.dur[p]).join(",")}`;
   const today = () => { const d = new Date(); return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`; };
@@ -112,26 +113,33 @@
     if (custom) all[routeKey()] = { day: today(), v: custom }; else delete all[routeKey()];
     store.set("custom", JSON.stringify(all));
   }
-  /* ลิงก์: o=id,id,!id~id,... (คั่นสถานที่ด้วย ~ · ! = ข้าม) */
+  /* ลิงก์: o=id,id:5,!id~id,... (คั่นสถานที่ด้วย ~ · ! = ข้าม · :5 = ปรับเป็น 5 นาที) */
   function parseCustom(str) {
     const out = {};
     String(str).split("~").forEach((seg, i) => {
       const vid = parts(state.venue)[i];
       if (!vid || !seg) return;
-      const order = [], skip = [];
+      const order = [], skip = [], min = {};
       seg.split(",").forEach((t) => {
-        const id = t.replace(/^!/, "");
-        if (!STOPS[id] || STOPS[id].venue !== vid || order.includes(id)) return;
+        const m = /^(!?)([^:]+)(?::(\d+))?$/.exec(t);
+        if (!m) return;
+        const id = m[2];
+        if (!STOPS[id] || STOPS[id].venue !== vid || order.includes(id) || min[id]) return;
+        if (m[3]) min[id] = Math.min(MAX_STOP, Math.max(MIN_STOP, Number(m[3])));
+        if (STOPS[id].closing) return; /* จุดปิดท้าย: ปรับได้เฉพาะเวลา */
         order.push(id);
-        if (t[0] === "!") skip.push(id);
+        if (m[1]) skip.push(id);
       });
-      if (order.length) out[vid] = { order, skip };
+      if (order.length || Object.keys(min).length) out[vid] = { order, skip, min };
     });
     return Object.keys(out).length ? out : null;
   }
   const customParam = () => (custom ? parts(state.venue).map((vid) => {
     const c = custom[vid];
-    return c ? c.order.map((id) => (c.skip.includes(id) ? `!${id}` : id)).join(",") : "";
+    if (!c) return "";
+    const mins = c.min || {};
+    const tok = (id) => `${c.skip.includes(id) ? "!" : ""}${id}${mins[id] ? `:${mins[id]}` : ""}`;
+    return [...c.order.map(tok), ...Object.keys(mins).filter((id) => !c.order.includes(id)).map(tok)].join(",");
   }).join("~") : "");
   /* จุดของสถานที่หนึ่งตามเส้นทางหลัก (จุดปิดท้ายใช้เฉพาะสถานที่สุดท้าย) */
   const baseList = (vid, vi, n) => (ROUTES[vid][state.group][state.dur[vid]] || [])
@@ -145,23 +153,26 @@
     const pos = new Map(c ? c.order.map((id, k) => [id, k]) : []);
     const sorted = movable.map((x, k) => [x, pos.has(x[0]) ? pos.get(x[0]) : 1e4 + k]).sort((a, b) => a[1] - b[1]).map((x) => x[0]);
     const skip = new Set(c ? c.skip : []);
-    return [
-      ...sorted.map(([id, min]) => ({ id, min, skip: skip.has(id), fixed: false })),
-      ...fixed.map(([id, min]) => ({ id, min, skip: false, fixed: true })),
-    ];
+    const mins = (c && c.min) || {};
+    const row = (fixedRow) => ([id, base]) => ({ id, base, min: mins[id] || base, skip: !fixedRow && skip.has(id), fixed: fixedRow });
+    return [...sorted.map(row(false)), ...fixed.map(row(true))];
   }
   function editCustom(vid, fn) {
     const ps = parts(state.venue), vi = ps.indexOf(vid);
-    const rows = arranged(vid, vi, ps.length).filter((r) => !r.fixed);
-    const c = { order: rows.map((r) => r.id), skip: rows.filter((r) => r.skip).map((r) => r.id) };
+    const all = arranged(vid, vi, ps.length);
+    const rows = all.filter((r) => !r.fixed);
+    const min = {};
+    all.forEach((r) => { if (r.min !== r.base) min[r.id] = r.min; });
+    const c = { order: rows.map((r) => r.id), skip: rows.filter((r) => r.skip).map((r) => r.id), min };
     fn(c);
+    Object.keys(c.min).forEach((id) => { if (c.min[id] === all.find((r) => r.id === id).base) delete c.min[id]; });
     custom = { ...(custom || {}), [vid]: c };
     /* กลับมาเหมือนเส้นทางหลักทุกสถานที่ → ไม่ถือว่าปรับเอง */
     const same = ps.every((v, i) => {
       const cc = custom[v];
       if (!cc) return true;
       const base = baseList(v, i, ps.length).filter(([id]) => !STOPS[id].closing).map(([id]) => id);
-      return !cc.skip.length && cc.order.join(",") === base.join(",");
+      return !cc.skip.length && !Object.keys(cc.min || {}).length && cc.order.join(",") === base.join(",");
     });
     if (same) custom = null;
     saveCustom();
@@ -333,11 +344,21 @@
     const route = getRoute() || [];
     const ps = parts(state.venue);
     const total = routeTotal(route);
-    let skipMin = 0, skipN = 0;
-    ps.forEach((vid, vi) => arranged(vid, vi, ps.length).forEach((r) => { if (r.skip) { skipMin += r.min; skipN++; } }));
-    return { total, base: total + skipMin, skipMin, skipN, end: addMin(state.start, total) };
+    let skipMin = 0, skipN = 0, adj = 0;
+    ps.forEach((vid, vi) => arranged(vid, vi, ps.length).forEach((r) => {
+      if (r.skip) { skipMin += r.base; skipN++; } else adj += r.min - r.base;
+    }));
+    return { total, base: total + skipMin - adj, skipMin, skipN, adj, end: addMin(state.start, total) };
   }
-  const timeLine = (t) => `ใช้เวลาจริง <b>${t.total} นาที</b>${state.start ? ` (${state.start} – ${t.end} น.)` : ""}${t.skipN ? ` · เส้นทางหลัก ${t.base} นาที ข้าม ${t.skipN} จุด −${t.skipMin} นาที` : ""}`;
+  const sign = (n) => (n > 0 ? `+${n}` : `−${-n}`);
+  const timeLine = (t) => {
+    const bits = [];
+    if (t.skipN) bits.push(`ข้าม ${t.skipN} จุด −${t.skipMin}`);
+    if (t.adj) bits.push(`ปรับเวลา ${sign(t.adj)}`);
+    const diff = t.total - t.base;
+    const gap = !diff ? "เท่ากับเส้นทางหลักพอดี" : diff < 0 ? `น้อยกว่าเส้นทางหลัก ${-diff} นาที` : `เกินเส้นทางหลัก ${diff} นาที`;
+    return `ใช้เวลาจริง <b>${t.total} นาที</b>${state.start ? ` (${state.start} – ${t.end} น.)` : ""} · เส้นทางหลัก ${t.base} นาที${bits.length ? ` (${bits.join(", ")} นาที)` : ""} · <span class="gap ${diff < 0 ? "under" : diff > 0 ? "over" : "even"}">${gap}</span>`;
+  };
 
   function reorderHtml() {
     const ps = parts(state.venue);
@@ -346,7 +367,7 @@
       <section class="card reorder fade-in" aria-labelledby="reorderTitle">
         <h3 id="reorderTitle">✏️ ปรับลำดับเฉพาะรอบนี้</h3>
         <p class="ro-total top">⏱ ${timeLine(t)}</p>
-        <p class="ro-hint">กด ▲▼ เพื่อสลับลำดับ หรือกด "ข้าม" ถ้ารอบนี้ไม่แวะจุดนั้น ใช้ได้ในเครื่องนี้ถึงสิ้นวัน และในลิงก์ที่คัดลอกจากหน้านี้ เส้นทางหลักของคนอื่นไม่เปลี่ยน</p>
+        <p class="ro-hint">กด ▲▼ เพื่อสลับลำดับ กด − + เพื่อปรับนาทีของแต่ละจุด หรือกด "ข้าม" ถ้ารอบนี้ไม่แวะจุดนั้น ใช้ได้ในเครื่องนี้ถึงสิ้นวัน และในลิงก์ที่คัดลอกจากหน้านี้ เส้นทางหลักของคนอื่นไม่เปลี่ยน</p>
         ${ps.map((vid, vi) => {
           const rows = arranged(vid, vi, ps.length);
           const last = rows.filter((r) => !r.fixed).length - 1;
@@ -358,8 +379,13 @@
             return `
             <li class="ro-row${r.skip ? " skipped" : ""}">
               <span class="ro-ico" aria-hidden="true">${s.icon}</span>
-              <span class="ro-txt"><b>${esc(s.name)}</b><small>${esc(locLabel(s))} · ${r.min} นาที${r.skip ? " · ข้ามรอบนี้" : ""}</small></span>
-              ${r.fixed ? `<span class="ro-fixed">🏁 ท้ายสุดเสมอ</span>` : `
+              <span class="ro-txt"><b>${esc(s.name)}</b><small>${esc(locLabel(s))}${r.skip ? " · ข้ามรอบนี้" : r.min !== r.base ? ` · เดิม ${r.base} นาที` : ""}${r.fixed ? " · 🏁 ท้ายสุดเสมอ" : ""}</small></span>
+              <span class="ro-min${r.min !== r.base ? " changed" : ""}" role="group" aria-label="เวลาที่ ${esc(s.name)}">
+                <button type="button" data-ro="minus" ${a} ${r.skip || r.min <= MIN_STOP ? "disabled" : ""} aria-label="ลด 1 นาที">−</button>
+                <span class="ro-val">${r.skip ? "–" : r.min}<small>นาที</small></span>
+                <button type="button" data-ro="plus" ${a} ${r.skip || r.min >= MAX_STOP ? "disabled" : ""} aria-label="เพิ่ม 1 นาที">+</button>
+              </span>
+              ${r.fixed ? `<span class="ro-btns ro-btns-fixed" aria-hidden="true"></span>` : `
               <span class="ro-btns">
                 <button type="button" data-ro="up" ${a} ${k === 0 ? "disabled" : ""} aria-label="เลื่อน ${esc(s.name)} ขึ้น">▲</button>
                 <button type="button" data-ro="down" ${a} ${k === last ? "disabled" : ""} aria-label="เลื่อน ${esc(s.name)} ลง">▼</button>
@@ -390,7 +416,7 @@
     const total = routeTotal(route);
     const end = addMin(state.start, total);
     const ps = parts(state.venue);
-    const skippedMin = (vid) => (custom && custom[vid] ? arranged(vid, ps.indexOf(vid), ps.length).filter((r) => r.skip).reduce((x, r) => x + r.min, 0) : 0);
+    const skippedMin = (vid) => (custom && custom[vid] ? arranged(vid, ps.indexOf(vid), ps.length).reduce((x, r) => x + (r.skip ? r.base : r.base - r.min), 0) : 0);
     const skipped = custom ? ps.reduce((a, vid, vi) => a + arranged(vid, vi, ps.length).filter((r) => r.skip).length, 0) : 0;
 
     el.innerHTML = `
@@ -415,7 +441,7 @@
           <button class="btn glass" id="shareBtn">🔗 คัดลอกลิงก์</button>
           <button class="btn glass" data-ro="edit" aria-pressed="${editing}">✏️ ปรับลำดับรอบนี้</button>
         </div>
-        ${custom ? `<div class="custom-note">✏️ รอบนี้ใช้ลำดับที่ปรับเอง · ใช้เวลาจริง ${total} นาที${skipped ? ` (เส้นทางหลัก ${timeInfo().base} นาที ข้าม ${skipped} จุด)` : ""} <span>(เฉพาะเครื่องนี้ ไม่กระทบเส้นทางหลัก)</span>
+        ${custom ? `<div class="custom-note">✏️ รอบนี้ปรับเอง · ใช้เวลาจริง ${total} นาที (เส้นทางหลัก ${timeInfo().base} นาที${skipped ? ` ข้าม ${skipped} จุด` : ""}) <span>(เฉพาะเครื่องนี้ ไม่กระทบเส้นทางหลัก)</span>
           <button type="button" data-ro="reset">↺ คืนค่าเส้นทางหลัก</button></div>` : ""}
       </div>
       ${editing ? reorderHtml() : ""}
@@ -480,6 +506,10 @@
     editCustom(vid, (c) => {
       const k = c.order.indexOf(id);
       if (act === "skip") c.skip = c.skip.includes(id) ? c.skip.filter((x) => x !== id) : [...c.skip, id];
+      else if (act === "plus" || act === "minus") {
+        const r = arranged(vid, parts(state.venue).indexOf(vid), parts(state.venue).length).find((x) => x.id === id);
+        c.min[id] = Math.min(MAX_STOP, Math.max(MIN_STOP, r.min + (act === "plus" ? 1 : -1)));
+      }
       else {
         const j = k + (act === "up" ? -1 : 1);
         if (k < 0 || j < 0 || j >= c.order.length) return;

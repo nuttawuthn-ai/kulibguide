@@ -396,3 +396,34 @@ mark[class^="hl-"] { color: inherit; padding: 0 .15em; border-radius: 3px; -webk
 .ro-total b { font-size: 1.05rem; }
 .ro-total.top { margin: 8px 0 4px; }
 .ro-foot .ro-total { flex: 1 1 260px; align-self: center; }
+/* ปุ่ม − + นาทีต่อจุด */
+.ro-min { display: inline-flex; align-items: center; gap: 2px; flex-shrink: 0; background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 2px; }
+.ro-min button { width: 36px; height: 36px; border: 0; border-radius: 9px; background: var(--ku-50); color: var(--ku-700); font-size: 1.15rem; line-height: 1; }
+.ro-min button:disabled { opacity: .3; cursor: default; }
+.ro-val { min-width: 44px; text-align: center; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.1; display: flex; flex-direction: column; }
+.ro-val small { font-weight: 400; font-size: .7rem; color: var(--muted); }
+.ro-min.changed { border-color: var(--butter-ink); background: var(--butter); }
+.ro-min.changed .ro-val { color: var(--butter-ink); }
+.ro-btns { min-width: 176px; justify-content: flex-end; }
+.ro-total .gap { font-weight: 600; white-space: nowrap; }
+.ro-total .gap.under { color: #2e6390; }
+.ro-total .gap.over { color: #b3261e; }
+.ro-total .gap.even { color: #1d6b55; }
+@media (max-width: 520px) {
+  .ro-btns { min-width: 0; width: auto; flex: 1; }
+  .ro-btns-fixed { display: none; }
+  .ro-min { margin-left: 42px; }
+}
+@media (max-width: 520px) {
+  .ro-row { gap: 8px; }
+  .ro-txt { flex: 1 1 calc(100% - 50px); }
+  .ro-min { margin-left: 40px; }
+  .ro-btns { flex: 1 1 auto; width: auto; justify-content: flex-end; }
+}
+@media (max-width: 520px) {
+  .ro-min { margin-left: 0; }
+  .ro-min button { width: 34px; height: 34px; }
+  .ro-val { min-width: 38px; }
+  .ro-btns button { min-width: 36px; height: 36px; }
+  .ro-btns .ro-skip { padding: 0 8px; }
+}
