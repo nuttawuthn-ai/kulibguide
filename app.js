@@ -45,6 +45,8 @@
       parts(state.venue).forEach((p, i) => { if (validDur(p, ts[i])) state.dur[p] = ts[i]; });
     }
     state.lang = pick(params.get("l"), (v) => v === "th" || v === "en") || pick(store.get("l"), (v) => v === "th" || v === "en") || "th";
+    loadCustom();
+    if (ready() && params.get("o")) { custom = parseCustom(params.get("o")); saveCustom(); }
   }
   /* หลังได้ข้อมูลชุดใหม่: ล้างค่าที่เลือกไว้ถ้าสถานที่/กลุ่ม/เวลานั้นไม่มีแล้ว */
   function keepValidState() {
@@ -91,6 +93,80 @@
     return steps.join(" → ") || "เดินต่อในบริเวณเดียวกัน";
   }
 
+  /* ---------- ปรับลำดับเฉพาะรอบนี้ ----------
+   * ผู้นำชมสลับลำดับ/ข้ามจุดได้เอง เก็บไว้ในเครื่องนี้ถึงสิ้นวัน (และในลิงก์ที่คัดลอก)
+   * ไม่ส่งขึ้นเซิร์ฟเวอร์ เส้นทางหลักของคนอื่นจึงไม่เปลี่ยน
+   * custom = { [venueId]: { order: [stopId ตามลำดับใหม่], skip: [stopId ที่ข้าม] } } */
+  let custom = null, editing = false;
+  const routeKey = () => `${state.venue}|${state.group}|${parts(state.venue).map((p) => state.dur[p]).join(",")}`;
+  const today = () => { const d = new Date(); return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`; };
+  function loadCustom() {
+    editing = false; custom = null;
+    if (!ready()) return;
+    const c = (readJson("custom") || {})[routeKey()];
+    if (c && c.day === today() && c.v && typeof c.v === "object") custom = c.v;
+  }
+  function saveCustom() {
+    const all = readJson("custom") || {};
+    Object.keys(all).forEach((k) => { if (!all[k] || all[k].day !== today()) delete all[k]; });
+    if (custom) all[routeKey()] = { day: today(), v: custom }; else delete all[routeKey()];
+    store.set("custom", JSON.stringify(all));
+  }
+  /* ลิงก์: o=id,id,!id~id,... (คั่นสถานที่ด้วย ~ · ! = ข้าม) */
+  function parseCustom(str) {
+    const out = {};
+    String(str).split("~").forEach((seg, i) => {
+      const vid = parts(state.venue)[i];
+      if (!vid || !seg) return;
+      const order = [], skip = [];
+      seg.split(",").forEach((t) => {
+        const id = t.replace(/^!/, "");
+        if (!STOPS[id] || STOPS[id].venue !== vid || order.includes(id)) return;
+        order.push(id);
+        if (t[0] === "!") skip.push(id);
+      });
+      if (order.length) out[vid] = { order, skip };
+    });
+    return Object.keys(out).length ? out : null;
+  }
+  const customParam = () => (custom ? parts(state.venue).map((vid) => {
+    const c = custom[vid];
+    return c ? c.order.map((id) => (c.skip.includes(id) ? `!${id}` : id)).join(",") : "";
+  }).join("~") : "");
+  /* จุดของสถานที่หนึ่งตามเส้นทางหลัก (จุดปิดท้ายใช้เฉพาะสถานที่สุดท้าย) */
+  const baseList = (vid, vi, n) => (ROUTES[vid][state.group][state.dur[vid]] || [])
+    .filter(([id]) => STOPS[id] && !(STOPS[id].closing && vi < n - 1));
+  /* แถวสำหรับหน้าปรับลำดับ: จุดที่ย้ายได้ตามลำดับใหม่ (รวมจุดที่ข้าม) + จุดปิดท้ายท้ายสุดเสมอ */
+  function arranged(vid, vi, n) {
+    const list = baseList(vid, vi, n);
+    const c = custom && custom[vid];
+    const movable = list.filter(([id]) => !STOPS[id].closing);
+    const fixed = list.filter(([id]) => STOPS[id].closing);
+    const pos = new Map(c ? c.order.map((id, k) => [id, k]) : []);
+    const sorted = movable.map((x, k) => [x, pos.has(x[0]) ? pos.get(x[0]) : 1e4 + k]).sort((a, b) => a[1] - b[1]).map((x) => x[0]);
+    const skip = new Set(c ? c.skip : []);
+    return [
+      ...sorted.map(([id, min]) => ({ id, min, skip: skip.has(id), fixed: false })),
+      ...fixed.map(([id, min]) => ({ id, min, skip: false, fixed: true })),
+    ];
+  }
+  function editCustom(vid, fn) {
+    const ps = parts(state.venue), vi = ps.indexOf(vid);
+    const rows = arranged(vid, vi, ps.length).filter((r) => !r.fixed);
+    const c = { order: rows.map((r) => r.id), skip: rows.filter((r) => r.skip).map((r) => r.id) };
+    fn(c);
+    custom = { ...(custom || {}), [vid]: c };
+    /* กลับมาเหมือนเส้นทางหลักทุกสถานที่ → ไม่ถือว่าปรับเอง */
+    const same = ps.every((v, i) => {
+      const cc = custom[v];
+      if (!cc) return true;
+      const base = baseList(v, i, ps.length).filter(([id]) => !STOPS[id].closing).map(([id]) => id);
+      return !cc.skip.length && cc.order.join(",") === base.join(",");
+    });
+    if (same) custom = null;
+    saveCustom();
+  }
+
   /* เส้นทาง = จุดของแต่ละสถานที่ต่อกัน คั่นด้วยช่วงเดินทางโดยรถ
      จุดปิดท้าย (closing) ใช้เฉพาะของสถานที่สุดท้าย */
   const getRoute = () => {
@@ -100,7 +176,7 @@
     let acc = 0, prev = null;
     const push = (it) => { it.i = items.length; it.from = acc; acc += it.min; items.push(it); prev = it; };
     ps.forEach((vid, vi) => {
-      const list = (ROUTES[vid][state.group][state.dur[vid]] || []).filter(([id]) => !(STOPS[id].closing && vi < ps.length - 1));
+      const list = arranged(vid, vi, ps.length).filter((r) => !r.skip).map((r) => [r.id, r.min]);
       if (vi > 0 && list.length) {
         const dest = VENUES[vid], first = STOPS[list[0][0]];
         push({
@@ -127,7 +203,7 @@
     clearTimeout(toast._t);
     toast._t = setTimeout(() => t.classList.remove("show"), 2000);
   };
-  const shareUrl = () => `?p=${encodeURIComponent(state.venue)}&g=${state.group}&t=${parts(state.venue).map((p) => state.dur[p]).join(",")}&l=${state.lang}`;
+  const shareUrl = () => `?p=${encodeURIComponent(state.venue)}&g=${state.group}&t=${parts(state.venue).map((p) => state.dur[p]).join(",")}&l=${state.lang}${custom ? `&o=${encodeURIComponent(customParam())}` : ""}`;
 
   /* ---------- selectors ---------- */
   const venueTone = (vid) => BUILDINGS[Content.buildingsOf(vid)[0]].tone;
@@ -192,6 +268,7 @@
     if (!b) return;
     state.venue = b.dataset.p;
     store.set("p", state.venue);
+    loadCustom();
     renderVenues(); renderDurations(); renderResult(true);
   });
   $("#groupGrid").addEventListener("click", (e) => {
@@ -199,6 +276,7 @@
     if (!b) return;
     state.group = b.dataset.g;
     store.set("g", state.group);
+    loadCustom();
     renderGroups(); renderResult(true);
   });
   $("#durGrid").addEventListener("click", (e) => {
@@ -206,6 +284,7 @@
     if (!b) return;
     state.dur[b.dataset.v] = Number(b.dataset.t);
     store.set("dur", JSON.stringify(state.dur));
+    loadCustom();
     renderDurations(); renderResult(true);
   });
   document.addEventListener("click", (e) => {
@@ -249,8 +328,43 @@
         </details>` : ""}`;
   }
 
-  function renderResult(scroll) {
+  function reorderHtml() {
+    const ps = parts(state.venue);
+    return `
+      <section class="card reorder fade-in" aria-labelledby="reorderTitle">
+        <h3 id="reorderTitle">✏️ ปรับลำดับเฉพาะรอบนี้</h3>
+        <p class="ro-hint">กด ▲▼ เพื่อสลับลำดับ หรือกด "ข้าม" ถ้ารอบนี้ไม่แวะจุดนั้น ใช้ได้ในเครื่องนี้ถึงสิ้นวัน และในลิงก์ที่คัดลอกจากหน้านี้ เส้นทางหลักของคนอื่นไม่เปลี่ยน</p>
+        ${ps.map((vid, vi) => {
+          const rows = arranged(vid, vi, ps.length);
+          const last = rows.filter((r) => !r.fixed).length - 1;
+          return `
+          ${ps.length > 1 ? `<h4 class="ro-venue">${esc(VENUES[vid].icon)} ${esc(VENUES[vid].name)}</h4>` : ""}
+          <ol class="ro-list">${rows.map((r, k) => {
+            const s = STOPS[r.id];
+            const a = `data-v="${esc(vid)}" data-id="${esc(r.id)}"`;
+            return `
+            <li class="ro-row${r.skip ? " skipped" : ""}">
+              <span class="ro-ico" aria-hidden="true">${s.icon}</span>
+              <span class="ro-txt"><b>${esc(s.name)}</b><small>${esc(locLabel(s))} · ${r.min} นาที${r.skip ? " · ข้ามรอบนี้" : ""}</small></span>
+              ${r.fixed ? `<span class="ro-fixed">🏁 ท้ายสุดเสมอ</span>` : `
+              <span class="ro-btns">
+                <button type="button" data-ro="up" ${a} ${k === 0 ? "disabled" : ""} aria-label="เลื่อน ${esc(s.name)} ขึ้น">▲</button>
+                <button type="button" data-ro="down" ${a} ${k === last ? "disabled" : ""} aria-label="เลื่อน ${esc(s.name)} ลง">▼</button>
+                <button type="button" class="ro-skip" data-ro="skip" ${a} aria-pressed="${r.skip}">${r.skip ? "↩ นำกลับ" : "ข้าม"}</button>
+              </span>`}
+            </li>`;
+          }).join("")}</ol>`;
+        }).join("")}
+        <div class="ro-foot">
+          <button type="button" class="btn ghost" data-ro="reset" ${custom ? "" : "disabled"}>↺ คืนค่าเส้นทางหลัก</button>
+          <button type="button" class="btn primary" data-ro="done">✓ เสร็จ</button>
+        </div>
+      </section>`;
+  }
+
+  function renderResult(scroll, quiet) {
     const el = $("#result");
+    el.classList.toggle("quiet", !!quiet); /* กดปรับลำดับ: ไม่เล่นภาพเคลื่อนไหวซ้ำทุกครั้ง */
     const route = getRoute();
     if (!route) {
       const need = !state.venue ? "สถานที่" : !state.group ? "กลุ่มผู้เยี่ยมชม" : "เวลานำชม";
@@ -262,6 +376,8 @@
     const total = routeTotal(route);
     const end = addMin(state.start, total);
     const ps = parts(state.venue);
+    const skippedMin = (vid) => (custom && custom[vid] ? arranged(vid, ps.indexOf(vid), ps.length).filter((r) => r.skip).reduce((x, r) => x + r.min, 0) : 0);
+    const skipped = custom ? ps.reduce((a, vid, vi) => a + arranged(vid, vi, ps.length).filter((r) => r.skip).length, 0) : 0;
 
     el.innerHTML = `
       <div class="summary fade-in">
@@ -274,7 +390,7 @@
         </div>
         <div class="stats">
           <span class="stat">📍 ${route.filter((r) => !r.travel).length} จุด</span>
-          ${ps.length > 1 ? `<span class="stat">🧭 ${ps.map((p) => `${esc(VENUES[p].icon)} ${state.dur[p]}`).join(" + ")} + 🚐 ${TRAVEL.minutes} นาที</span>` : ""}
+          ${ps.length > 1 ? `<span class="stat">🧭 ${ps.map((p) => `${esc(VENUES[p].icon)} ${state.dur[p] - skippedMin(p)}`).join(" + ")} + 🚐 ${TRAVEL.minutes} นาที</span>` : ""}
           <span class="stat">🏢 ${blds.join(" + ")}</span>
           ${state.start ? `<span class="stat">🕒 ${state.start} – ${end} น.</span>` : ""}
           <span class="stat">🗣 ${state.lang === "th" ? "ภาษาไทย" : "English"}</span>
@@ -283,8 +399,12 @@
           <button class="btn white" id="startTour">▶ เริ่มโหมดนำชม</button>
           <button class="btn glass" id="printBtn">🖨 พิมพ์ / บันทึก PDF</button>
           <button class="btn glass" id="shareBtn">🔗 คัดลอกลิงก์</button>
+          <button class="btn glass" data-ro="edit" aria-pressed="${editing}">✏️ ปรับลำดับรอบนี้</button>
         </div>
+        ${custom ? `<div class="custom-note">✏️ รอบนี้ใช้ลำดับที่ปรับเอง${skipped ? ` · ข้าม ${skipped} จุด` : ""} <span>(เฉพาะเครื่องนี้ ไม่กระทบเส้นทางหลัก)</span>
+          <button type="button" data-ro="reset">↺ คืนค่าเส้นทางหลัก</button></div>` : ""}
       </div>
+      ${editing ? reorderHtml() : ""}
 
       <div class="layout">
         <ol class="timeline">
@@ -336,7 +456,34 @@
     if (scroll) el.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
+  $("#result").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-ro]");
+    if (!b || b.disabled) return;
+    const act = b.dataset.ro, vid = b.dataset.v, id = b.dataset.id;
+    if (act === "edit") { editing = !editing; renderResult(false, true); if (editing) $(".reorder").scrollIntoView({ behavior: "smooth", block: "start" }); return; }
+    if (act === "done") { editing = false; renderResult(true); toast(custom ? "ใช้ลำดับที่ปรับแล้ว" : "ใช้เส้นทางหลัก"); return; }
+    if (act === "reset") { custom = null; saveCustom(); renderResult(false, true); toast("คืนค่าเส้นทางหลักแล้ว"); return; }
+    editCustom(vid, (c) => {
+      const k = c.order.indexOf(id);
+      if (act === "skip") c.skip = c.skip.includes(id) ? c.skip.filter((x) => x !== id) : [...c.skip, id];
+      else {
+        const j = k + (act === "up" ? -1 : 1);
+        if (k < 0 || j < 0 || j >= c.order.length) return;
+        [c.order[k], c.order[j]] = [c.order[j], c.order[k]];
+      }
+    });
+    if (act === "skip" && parts(state.venue).every((v, vi, ps) => !arranged(v, vi, ps.length).some((r) => !r.skip))) {
+      editCustom(vid, (c) => { c.skip = c.skip.filter((x) => x !== id); });
+      toast("ต้องเหลืออย่างน้อย 1 จุด");
+    }
+    renderResult(false, true);
+    const again = document.querySelector(`[data-ro="${act}"][data-id="${CSS.escape(id)}"]`);
+    if (again && !again.disabled) again.focus();
+    else { const row = document.querySelector(`[data-id="${CSS.escape(id)}"]`); if (row) row.focus(); }
+  });
+
   /* เปิดหมายเหตุทั้งหมดเมื่อพิมพ์ */
+  window.addEventListener("beforeprint", () => { if (editing) { editing = false; renderResult(); } });
   window.addEventListener("beforeprint", () => document.querySelectorAll("#result details").forEach((d) => { d.dataset.wasOpen = d.open; d.open = true; }));
   window.addEventListener("afterprint", () => document.querySelectorAll("#result details").forEach((d) => { d.open = d.dataset.wasOpen === "true"; }));
 

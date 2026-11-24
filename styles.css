@@ -356,3 +356,39 @@ input, select, textarea { font-size: 16px; } /* ป้องกัน iOS ซู
 mark[class^="hl-"] { color: inherit; padding: 0 .15em; border-radius: 3px; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
 .hl-yellow { background: #fff176; } .hl-green { background: #c8f7c5; } .hl-pink { background: #ffcdd2; } .hl-blue { background: #cfe8ff; }
 @media print { mark[class^="hl-"], [class^="tc-"] { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+
+/* ---------- ปรับลำดับเฉพาะรอบนี้ ---------- */
+.custom-note { margin-top: 12px; padding: 8px 12px; border-radius: 12px; background: rgba(255,255,255,.16); font-size: .9rem; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+.custom-note span { opacity: .85; }
+.custom-note button { margin-left: auto; border: 0; border-radius: 10px; padding: 4px 10px; background: #fff; color: var(--ku-700); font-size: .85rem; }
+.reorder h3 { font-size: 1.1rem; }
+.ro-hint { color: var(--muted); font-size: .9rem; margin: 4px 0 12px; }
+.ro-venue { margin: 14px 0 6px; font-family: var(--head); font-weight: 600; font-size: 1rem; }
+.ro-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.ro-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 14px; background: var(--ku-50); }
+.ro-row.skipped { background: #fff; border-style: dashed; }
+.ro-row.skipped .ro-ico, .ro-row.skipped .ro-txt { opacity: .45; }
+.ro-row.skipped .ro-txt b { text-decoration: line-through; }
+.ro-ico { font-size: 1.4rem; width: 32px; text-align: center; flex-shrink: 0; }
+.ro-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.35; }
+.ro-txt b { font-weight: 500; overflow-wrap: anywhere; }
+.ro-txt small { color: var(--muted); }
+.ro-btns { display: flex; gap: 4px; flex-shrink: 0; }
+.ro-btns button { min-width: 40px; height: 40px; border-radius: 10px; border: 1px solid var(--line); background: #fff; color: var(--ku-700); }
+.ro-btns button:disabled { opacity: .35; cursor: default; }
+.ro-btns .ro-skip { padding: 0 10px; font-size: .85rem; }
+.ro-btns .ro-skip[aria-pressed="true"] { background: var(--ku-100); }
+.ro-fixed { font-size: .8rem; color: var(--muted); flex-shrink: 0; }
+.ro-foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+.ro-foot .btn:disabled { opacity: .4; cursor: default; }
+@media (max-width: 520px) {
+  .ro-row { flex-wrap: wrap; }
+  .ro-btns { width: 100%; justify-content: flex-end; }
+  .ro-foot .btn { flex: 1; justify-content: center; }
+}
+@media print {
+  .reorder { display: none !important; }
+  .custom-note { background: var(--ku-50); color: var(--ink); }
+  .custom-note button { display: none; }
+}
+.quiet .fade-in { animation: none !important; }
