@@ -360,13 +360,39 @@
     return `ใช้เวลาจริง <b>${t.total} นาที</b>${state.start ? ` (${state.start} – ${t.end} น.)` : ""} · เส้นทางหลัก ${t.base} นาที${bits.length ? ` (${bits.join(", ")} นาที)` : ""} · <span class="gap ${diff < 0 ? "under" : diff > 0 ? "over" : "even"}">${gap}</span>`;
   };
 
+  /* เกลี่ยส่วนต่างระหว่างเวลาจริงกับเส้นทางหลัก ให้จุดที่ยังแวะ (ไม่รวมจุดปิดท้าย) ทีละ 1 นาทีวนไป
+     เพิ่ม: เริ่มจากจุดที่ใช้เวลานานกว่าเดิมน้อยที่สุด · ลด: เริ่มจากจุดที่เพิ่มไว้มากที่สุด */
+  function fillTime() {
+    const ps = parts(state.venue);
+    let diff = timeInfo().base - timeInfo().total;
+    const rows = [];
+    ps.forEach((vid, vi) => arranged(vid, vi, ps.length).forEach((r) => { if (!r.skip && !r.fixed) rows.push({ ...r, vid }); }));
+    if (!rows.length || !diff) return;
+    const step = diff > 0 ? 1 : -1;
+    let guard = 2000;
+    while (diff && guard--) {
+      const ok = rows.filter((r) => (step > 0 ? r.min < MAX_STOP : r.min > MIN_STOP));
+      if (!ok.length) break;
+      ok.sort((a, b) => (step > 0 ? (a.min - a.base) - (b.min - b.base) || a.min - b.min : (b.min - b.base) - (a.min - a.base) || b.min - a.min));
+      ok[0].min += step; diff -= step;
+    }
+    ps.forEach((vid) => {
+      const mine = rows.filter((r) => r.vid === vid);
+      if (mine.length) editCustom(vid, (c) => { mine.forEach((r) => { c.min[r.id] = r.min; }); });
+    });
+    toast(diff ? "ปรับได้เท่าที่ทำได้ (แต่ละจุดไม่เกิน 30 นาที)" : "เกลี่ยเวลาแล้ว ตรวจและปรับต่อด้วย − + ได้");
+  }
+
   function reorderHtml() {
     const ps = parts(state.venue);
     const t = timeInfo();
     return `
       <section class="card reorder fade-in" aria-labelledby="reorderTitle">
         <h3 id="reorderTitle">✏️ ปรับลำดับเฉพาะรอบนี้</h3>
-        <p class="ro-total top">⏱ ${timeLine(t)}</p>
+        <div class="ro-top">
+          <p class="ro-total top">⏱ ${timeLine(t)}</p>
+          ${t.total !== t.base ? `<button type="button" class="btn soft ro-fill" data-ro="fill">⚖️ ${t.total < t.base ? `เกลี่ยเวลาเพิ่มให้ครบ ${t.base} นาที` : `เกลี่ยเวลาลดให้เหลือ ${t.base} นาที`}</button>` : ""}
+        </div>
         <p class="ro-hint">กด ▲▼ เพื่อสลับลำดับ กด − + เพื่อปรับนาทีของแต่ละจุด หรือกด "ข้าม" ถ้ารอบนี้ไม่แวะจุดนั้น ใช้ได้ในเครื่องนี้ถึงสิ้นวัน และในลิงก์ที่คัดลอกจากหน้านี้ เส้นทางหลักของคนอื่นไม่เปลี่ยน</p>
         ${ps.map((vid, vi) => {
           const rows = arranged(vid, vi, ps.length);
@@ -502,6 +528,7 @@
     const act = b.dataset.ro, vid = b.dataset.v, id = b.dataset.id;
     if (act === "edit") { editing = !editing; renderResult(false, true); if (editing) $(".reorder").scrollIntoView({ behavior: "smooth", block: "start" }); return; }
     if (act === "done") { editing = false; renderResult(true); toast(custom ? "ใช้ลำดับที่ปรับแล้ว" : "ใช้เส้นทางหลัก"); return; }
+    if (act === "fill") { fillTime(); renderResult(false, true); return; }
     if (act === "reset") { custom = null; saveCustom(); renderResult(false, true); toast("คืนค่าเส้นทางหลักแล้ว"); return; }
     editCustom(vid, (c) => {
       const k = c.order.indexOf(id);

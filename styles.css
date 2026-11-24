@@ -427,3 +427,7 @@ mark[class^="hl-"] { color: inherit; padding: 0 .15em; border-radius: 3px; -webk
   .ro-btns button { min-width: 36px; height: 36px; }
   .ro-btns .ro-skip { padding: 0 8px; }
 }
+.ro-top { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0 4px; }
+.ro-top .ro-total.top { margin: 0; flex: 1 1 320px; }
+.ro-fill { flex-shrink: 0; }
+@media (max-width: 520px) { .ro-fill { width: 100%; justify-content: center; } }
